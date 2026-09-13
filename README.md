@@ -280,8 +280,13 @@ it config-driven is the first item on the roadmap and the single biggest adoptio
 blocker. The benign suite is written per customer (18 cases here). Days of work, not
 months, but not zero.
 
-**Deliberately not built yet:** config-driven oracle, multi-tenancy, authentication on
-the `/admin/*` endpoints, alerting/SLA integration.
+**Deliberately not built yet:** config-driven oracle, multi-tenancy, benign-recovery
+patches (the Defender can only tighten, so benign competence never climbs back on
+its own), alerting/SLA integration.
+
+The `/admin/*` routes require an `X-Warden-Admin` shared secret and are disabled
+outright when `WARDEN_ADMIN_TOKEN` is unset - `/admin/halt` is a kill switch and this
+service is deployed to a public URL.
 
 Run the Target in your own infrastructure with the included `Dockerfile`; it keeps no
 durable state, so it is safe to kill and reschedule at any point.

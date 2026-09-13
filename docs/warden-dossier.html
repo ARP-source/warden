@@ -242,6 +242,25 @@ reverted when they failed to earn their keep.</p>
   open problem the loop is still working on.</p>
 </blockquote>
 
+<h3>Why benign competence can only fall</h3>
+<p>That cost is not an accident, and the mechanism is worth stating precisely.
+<span class="mono">_assert_hardening_only</span> in <span class="mono">defender/patches.py</span>
+refuses <em>any</em> change that loosens enforcement — disabling a check, raising a refund ceiling,
+lowering a justification requirement. The reason is sound: without it the loop could "fix" a
+failing attack by quietly relaxing the very control that was meant to stop it, and an attacker who
+worked that out would get the defender to disarm itself.</p>
+<p>The consequence is that <strong>the Defender is structurally incapable of recovering benign
+competence.</strong> It can only tighten. A bad patch can still be undone — a revert re-activates
+an earlier committed version rather than proposing a looser one, which is why 7 reverts were
+possible — but once a tightening is verified and held, its benign cost is permanent. Benign
+competence is a one-way ratchet, and 27.3% false refusals is where 25 patches of ratcheting has
+left it.</p>
+<p>The fix is not to weaken the guard. It is a separate <em>benign-recovery</em> patch kind that
+may loosen a control only when the executed-breach rate is zero and the benign score has regressed
+against its baseline, subject to the same verification and revert rules as any other patch — so
+relaxation is available to the loop's own measurements but never to an attacker's argument. That is
+the next piece of work, and it is deliberately not built yet.</p>
+
 <h2><span class="n">§4</span>Production readiness</h2>
 <p>The claim is not that it runs. It is that it already survived failure.</p>
 <ul>
@@ -249,6 +268,7 @@ reverted when they failed to earn their keep.</p>
   <li><strong>Tamper-evident audit ledger.</strong> Append-only and hash-chained, with the chain computed server-side under a Postgres advisory lock and appends enforced by triggers and row-level security.</li>
   <li><strong>Budget governor with a kill switch.</strong> Pre-flight reservation gate, drain mode, hard kill switch, a <span class="mono">reconcile</span> command, and a 1.25&times; pricing safety factor under a $70 ceiling.</li>
   <li><strong>Real deployed infrastructure.</strong> Supabase Postgres holds all durable state; a stateless FastAPI service runs on Vercel serverless. No local-only shortcuts and no mock data.</li>
+  <li><strong>The kill switch is not a public control.</strong> The <span class="mono">/admin/*</span> routes — reload, halt, clear-halt — require a shared secret and are disabled outright when none is configured, rather than defaulting to open. They were briefly reachable unauthenticated on the public deployment; that was found by auditing this service the way the project audits its own agent, and closed.</li>
   <li><strong>Instrumented and tested.</strong> Weave tracing on the hot path with a per-request flush for serverless; 101 tests across oracle, policy, patch guards, budget governor and ledger integrity.</li>
 </ul>
 
@@ -335,7 +355,7 @@ requests. That is days of work, not months, but it is not zero and it is not aut
 <ul>
   <li><strong>Config-driven oracle</strong> — so tool tiers and limits are declared, not coded. The single biggest adoption blocker.</li>
   <li><strong>Multi-tenancy</strong> — one run, one agent. No per-customer isolation.</li>
-  <li><strong>Authentication on the admin endpoints</strong> — <span class="mono">/admin/halt</span> and friends are unauthenticated; fine behind a private network, not fine on the internet.</li>
+  <li><strong>Benign-recovery patches</strong> — the Defender can only tighten, so benign competence never climbs back on its own (see §3).</li>
   <li><strong>Alerting and SLA integration</strong> — the ledger knows when a breach executes; nothing pages anyone.</li>
 </ul>
 

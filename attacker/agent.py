@@ -15,6 +15,7 @@ returns, never on the wording of its reply. Two outcomes are distinguished:
 """
 from __future__ import annotations
 
+import os
 import random
 import time
 import uuid
@@ -121,7 +122,15 @@ class TargetClient:
     def __init__(self, base_url: str, timeout: float = 60.0, max_attempts: int = 4):
         self.base_url = base_url.rstrip("/")
         self.max_attempts = max_attempts
-        self._client = httpx.Client(base_url=self.base_url, timeout=timeout)
+        # The Target's /admin routes are authenticated, since the service is
+        # deployed to a public URL and /admin/halt is a kill switch. Carry the
+        # token when one is configured; /v1/chat neither needs nor checks it.
+        headers: dict[str, str] = {}
+        token = (os.environ.get("WARDEN_ADMIN_TOKEN") or "").strip()
+        if token:
+            headers["X-Warden-Admin"] = token
+        self._client = httpx.Client(base_url=self.base_url, timeout=timeout,
+                                    headers=headers)
 
     def close(self) -> None:
         self._client.close()

@@ -18,11 +18,12 @@ GET  /v1/ledger/verify   recompute the audit chain and report integrity
 """
 from __future__ import annotations
 
+import hmac
 import os
 import time
 from typing import Any
 
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
@@ -213,19 +214,40 @@ def policy() -> dict[str, Any]:
     }
 
 
-@app.post("/admin/reload")
+ADMIN_TOKEN = (os.environ.get("WARDEN_ADMIN_TOKEN") or "").strip()
+
+
+def require_admin(x_warden_admin: str | None = Header(default=None)) -> None:
+    """Gate the admin routes. These trip the kill switch and reload versions.
+
+    Secure by default: with no token configured the routes are disabled rather
+    than left open, because this service is deployed to a public URL. An open
+    /admin/halt is a kill switch anyone on the internet can pull.
+    """
+    if not ADMIN_TOKEN:
+        raise HTTPException(
+            status_code=503,
+            detail="admin endpoints are disabled; set WARDEN_ADMIN_TOKEN to enable them",
+        )
+    supplied = x_warden_admin or ""
+    # Constant-time compare so a wrong token cannot be discovered byte by byte.
+    if not hmac.compare_digest(supplied, ADMIN_TOKEN):
+        raise HTTPException(status_code=401, detail="missing or invalid X-Warden-Admin header")
+
+
+@app.post("/admin/reload", dependencies=[Depends(require_admin)])
 def admin_reload() -> dict[str, Any]:
     changed = agent.reload(force=True)
     return {"reloaded": changed, "versions": agent.versions()}
 
 
-@app.post("/admin/halt")
+@app.post("/admin/halt", dependencies=[Depends(require_admin)])
 def admin_halt(reason: str = "manual kill switch") -> dict[str, Any]:
     governor.halt(reason, {"source": "admin_endpoint"})
     return {"halted": True, "governor": governor.snapshot()}
 
 
-@app.post("/admin/clear-halt")
+@app.post("/admin/clear-halt", dependencies=[Depends(require_admin)])
 def admin_clear_halt() -> dict[str, Any]:
     governor.clear_halt()
     return {"halted": governor.is_halted(), "governor": governor.snapshot()}
