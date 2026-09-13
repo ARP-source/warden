@@ -1,5 +1,11 @@
 # Warden - Agent Permission Immune System
 
+**Live surfaces**
+
+- Deployed Target endpoint: https://warden-beryl.vercel.app (`/healthz`, `/v1/chat`, `/v1/policy`)
+- Live dashboard (molab, hosted): https://molab.marimo.io/notebooks/nb_Pxk1VkWyH1hVZsn6PBA9Cz/app
+- Weave traces: project `warden-permission-immune-system`
+
 An autonomous loop that continuously red-teams an AI agent's **tool-calling
 permission boundaries**, auto-patches the weaknesses it finds, and proves the
 patches did not break normal behaviour.
