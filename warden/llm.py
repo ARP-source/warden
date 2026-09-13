@@ -266,7 +266,9 @@ class ModelClient:
 
         delay = 0.75
         last_exc: Exception | None = None
+        made = 0
         for attempt in range(1, max_attempts + 1):
+            made = attempt
             try:
                 with obs.span("model_call", role=role, model=model, attempt=attempt,
                               round_id=round_id, mode=self.mode):
@@ -304,11 +306,12 @@ class ModelClient:
         self.governor.release(reservation, reason="model_call_failed")
         self.ledger.log(
             "governor", ACT_ERROR, outcome="model_call_failed", round_id=round_id,
-            payload={"role": role, "model": model, "attempts": max_attempts,
-                     "error": str(last_exc)[:400]},
+            payload={"role": role, "model": model, "attempts": made,
+                     "max_attempts": max_attempts, "error": str(last_exc)[:400]},
         )
         raise PermanentLLMError(
-            f"model call for role {role} failed after {max_attempts} attempts: {last_exc}"
+            f"model call for role {role} on {model} failed after {made} attempt(s): "
+            f"{last_exc}"
         )
 
 

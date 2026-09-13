@@ -152,7 +152,16 @@ class OpenAICompatProvider:
         if resp.status_code >= 500:
             raise TransientLLMError(f"{resp.status_code}: {resp.text[:200]}")
         if resp.status_code >= 400:
-            raise PermanentLLMError(f"{resp.status_code}: {resp.text[:400]}")
+            body = resp.text[:400]
+            # Some inference servers surface genuinely transient concurrency
+            # faults as 400. "Already borrowed" is one, seen under parallel load;
+            # treating it as permanent would throw away a call that a retry
+            # completes successfully.
+            if any(marker in body for marker in
+                   ("Already borrowed", "currently loading", "model is warming",
+                    "temporarily unavailable", "try again")):
+                raise TransientLLMError(f"{resp.status_code} (transient): {body}")
+            raise PermanentLLMError(f"{resp.status_code}: {body}")
 
         try:
             data = resp.json()

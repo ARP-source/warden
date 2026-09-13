@@ -163,11 +163,30 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         try:
             from warden.openai_provider import OpenAICompatProvider
 
-            probe = OpenAICompatProvider(cfg.inference.base_url,
-                                         cfg.inference.api_key()).probe()
-            print(f"  inference reach : {probe}")
+            client = OpenAICompatProvider(cfg.inference.base_url,
+                                          cfg.inference.api_key())
+            resp = client._client.get("/models")
+            available = {m.get("id") for m in (resp.json().get("data") or [])}
+            print(f"  inference reach : ok, {len(available)} models available")
+            # A model id that does not exist 404s on every call and silently
+            # disables whichever agent uses it. That failure is invisible in
+            # aggregate metrics, so it is checked here by name.
+            bad = []
+            for role in ("target", "attacker", "defender", "analysis", "judge"):
+                name = cfg.model_for(role, "openai")
+                ok = name in available
+                print(f"    {role:9s} {name:44s} {'ok' if ok else 'NOT FOUND'}")
+                if not ok:
+                    bad.append(f"{role}={name}")
+            if bad:
+                checks.append(("configured models", False,
+                               "MISSING on this endpoint: " + ", ".join(bad)))
+            else:
+                checks.append(("configured models", True,
+                               "all five roles resolve to available models"))
         except Exception as exc:
             print(f"  inference reach : FAILED {exc}")
+            checks.append(("configured models", False, f"could not verify: {exc}"))
     print(f"  resolved store  : {store}"
           + ("   <-- local file, not hosted Postgres" if store == "sqlite" else ""))
     print(f"  spend ceiling   : ${cfg.budget.ceiling_usd:.2f}")
@@ -191,6 +210,9 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     except Exception:
         print("  target reach    : not running (start it with python run_target.py)")
 
+    for name, ok, note in checks:
+        if name == "configured models":
+            print(f"  [{'ok ' if ok else 'XX'}] {name:28s} {note}")
     degraded = [n for n, ok, _ in checks if not ok and n != "ANTHROPIC_API_KEY"]
     print()
     if degraded:

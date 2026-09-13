@@ -12,12 +12,14 @@ seed = 20260912
 [budget]
 # HARD ceiling on real-dollar spend for the entire project run. Enforced by
 # atomic pre-flight reservation before every model call -- not monitored after.
-ceiling_usd = 8.00
+# Sized to stay well inside the free inference credits this project runs on.
+# Raise it only if you are knowingly spending real money.
+ceiling_usd = 2.00
 # Below this remaining balance, only Tier-A (cheap) callers are admitted;
 # Defender/Analysis are shed first. Graceful degradation, not a cliff.
-reserve_floor_usd = 1.50
+reserve_floor_usd = 0.35
 # Refuse any single call whose projected cost exceeds this.
-max_call_usd = 0.25
+max_call_usd = 0.05
 
 [limits]
 # Rate limits are independent of the dollar cap: both must pass.
@@ -64,11 +66,14 @@ judge = "claude-haiku-4-5-20251001"
 # Used when inference.provider resolves to "openai". These defaults target
 # W&B Inference, whose free credits come with the same key Weave uses. Tool
 # calling is required, so every model here must support it.
+# Verified present on the endpoint. A guessed model id 404s on every call and
+# silently disables whichever agent uses it, so these are checked by
+# `warden doctor --models` rather than assumed.
 target = "meta-llama/Llama-3.3-70B-Instruct"
-attacker = "meta-llama/Llama-3.3-70B-Instruct"
-defender = "deepseek-ai/DeepSeek-V3-0324"
-analysis = "deepseek-ai/DeepSeek-V3-0324"
-judge = "meta-llama/Llama-3.3-70B-Instruct"
+attacker = "meta-llama/Llama-3.1-8B-Instruct"
+defender = "deepseek-ai/DeepSeek-V3.1"
+analysis = "deepseek-ai/DeepSeek-V3.1"
+judge = "meta-llama/Llama-3.1-8B-Instruct"
 
 [pricing]
 # USD per million tokens, for pre-flight projection and actual accounting.
@@ -79,7 +84,7 @@ judge = "meta-llama/Llama-3.3-70B-Instruct"
 "claude-opus-5" = { input = 15.00, output = 75.00 }
 "meta-llama/Llama-3.3-70B-Instruct" = { input = 0.10, output = 0.35 }
 "meta-llama/Llama-3.1-8B-Instruct" = { input = 0.02, output = 0.05 }
-"deepseek-ai/DeepSeek-V3-0324" = { input = 0.45, output = 1.30 }
+"deepseek-ai/DeepSeek-V3.1" = { input = 0.55, output = 1.65 }
 "Qwen/Qwen3-235B-A22B-Instruct-2507" = { input = 0.10, output = 0.10 }
 # Locally hosted models cost nothing to call, but still consume rate limit.
 "ollama" = { input = 0.0, output = 0.0 }
