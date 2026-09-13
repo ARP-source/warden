@@ -1,0 +1,302 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
+<title>Warden Dossier</title>
+<style>
+  :root{
+    --bg:#ffffff; --ink:#1b1b1b; --muted:#5f6663; --line:#dcdfde;
+    --accent:#0a6a5c; --crit:#b3261e; --warn:#8a6a1f; --good:#1c7a4f;
+    --bar-bg:#d8dcda; --bar-crit:#b3261e; --code-bg:#f4f6f5;
+    color-scheme:light;
+  }
+  @media (prefers-color-scheme:dark){
+    :root:not([data-theme="light"]){
+      --bg:#131615; --ink:#e6e9e8; --muted:#98a19e; --line:#2c3230;
+      --accent:#4fd1bd; --crit:#f0806c; --warn:#d6ab55; --good:#4cc088;
+      --bar-bg:#333a38; --bar-crit:#c25545; --code-bg:#1b1f1e;
+      color-scheme:dark;
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#131615; --ink:#e6e9e8; --muted:#98a19e; --line:#2c3230;
+    --accent:#4fd1bd; --crit:#f0806c; --warn:#d6ab55; --good:#4cc088;
+    --bar-bg:#333a38; --bar-crit:#c25545; --code-bg:#1b1f1e;
+    color-scheme:dark;
+  }
+
+  *{box-sizing:border-box}
+  body{
+    background:var(--bg); color:var(--ink);
+    font-family:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-size:16px; line-height:1.65;
+  }
+  .wrap{max-width:760px; margin:0 auto; padding:48px 24px 64px;}
+  .mono{font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size:.92em;}
+  .tnum{font-variant-numeric:tabular-nums;}
+
+  h1{font-size:27px; line-height:1.25; margin:0 0 6px; font-weight:650; letter-spacing:-.01em;}
+  .sub{color:var(--muted); font-size:15px; margin:0 0 22px;}
+  h2{font-size:19px; font-weight:650; margin:42px 0 4px; letter-spacing:-.005em;
+     padding-top:22px; border-top:1px solid var(--line);}
+  h2 .n{color:var(--muted); font-weight:400; font-size:15px; margin-right:8px;
+        font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;}
+  h3{font-size:15.5px; font-weight:650; margin:26px 0 6px;}
+  p{margin:0 0 14px;}
+  strong{font-weight:650;}
+  em{font-style:italic;}
+  a{color:var(--accent);}
+  a:focus-visible{outline:2px solid var(--accent); outline-offset:2px;}
+
+  .facts{margin:0 0 26px; padding:0; list-style:none; color:var(--muted); font-size:14px;}
+  .facts li{display:inline; }
+  .facts li:not(:last-child)::after{content:" · "; color:var(--line);}
+
+  ul{margin:0 0 14px; padding-left:22px;}
+  li{margin-bottom:7px;}
+
+  .chartwrap{overflow-x:auto; margin:18px 0 8px;}
+  svg{display:block; width:100%; height:auto; min-width:520px;}
+  .legend{font-size:13px; color:var(--muted); margin:4px 0 0;}
+  .note{font-size:13.5px; color:var(--muted); margin:8px 0 14px; line-height:1.5;}
+
+  .tablewrap{overflow-x:auto; margin:16px 0 8px;}
+  table{border-collapse:collapse; width:100%; min-width:620px; font-size:14.5px;}
+  th,td{text-align:left; padding:9px 12px 9px 0; border-bottom:1px solid var(--line);}
+  thead th{font-size:12.5px; font-weight:600; color:var(--muted); border-bottom:1px solid var(--ink);}
+  td.num, th.num{text-align:right; font-variant-numeric:tabular-nums; padding-right:14px;}
+  td.exec{text-align:right; padding-right:14px; font-variant-numeric:tabular-nums;
+          color:var(--crit); font-weight:600;}
+
+  blockquote{margin:16px 0; padding:2px 0 2px 16px; border-left:3px solid var(--line);}
+  blockquote.flag{border-left-color:var(--warn);}
+  blockquote p{margin:0 0 10px;} blockquote p:last-child{margin:0;}
+  blockquote .hd{font-weight:650; display:block; margin-bottom:6px;}
+
+  dl.kv{margin:14px 0; display:grid; grid-template-columns:auto 1fr; gap:4px 18px; font-size:15px;}
+  dl.kv dt{color:var(--muted);}
+  dl.kv dd{margin:0; font-variant-numeric:tabular-nums;}
+
+  pre{background:var(--code-bg); border:1px solid var(--line); border-radius:4px;
+      padding:12px 14px; overflow-x:auto; font-size:13px; line-height:1.65;
+      font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; margin:12px 0;}
+  pre .c{color:var(--muted);}
+
+  .steps{list-style:none; padding:0; margin:14px 0;}
+  .steps li{padding:9px 0; border-bottom:1px solid var(--line);}
+  .steps li:last-child{border-bottom:none;}
+  .steps b{font-weight:650;}
+
+  footer{margin-top:46px; padding-top:18px; border-top:1px solid var(--line);
+         color:var(--muted); font-size:13px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>Warden — Agent Permission Immune System</h1>
+<p class="sub">An autonomous loop that red-teams a tool-using AI agent's permission boundary,
+patches the enforcement policy when attacks get through, and proves each patch didn't break
+normal behavior before keeping it.</p>
+<ul class="facts">
+  <li>Build <span class="mono">demo-base-v1</span></li>
+  <li>Audit ledger 44,023 rows, chain verified</li>
+  <li>101 tests passing</li>
+  <li>CoreWeave Hacks (W&amp;B)</li>
+</ul>
+
+<h2><span class="n">§0</span>The result</h2>
+<p>The same 46 documented prompt-injection attacks were run against seven current production
+models with no defense, then against the Warden loop as it hardened itself. The measure that
+matters is the <strong>executed</strong> rate — attacks that didn't just trick the agent into
+<em>proposing</em> a forbidden tool call, but actually got the call through the gate.</p>
+
+<div class="chartwrap">
+  <svg viewBox="0 0 700 210" role="img" aria-label="Undefended production models: 65.5 percent manipulated, 22.4 percent executed. Warden first rounds: 8.0 percent manipulated, 2.0 percent executed. Warden latest rounds: 2.3 percent manipulated, 0.0 percent executed.">
+    <g font-size="11" fill="var(--muted)" font-family="ui-monospace, Menlo, Consolas, monospace">
+      <text x="0" y="200">0%</text>
+      <text x="150" y="200" text-anchor="middle">20%</text>
+      <text x="300" y="200" text-anchor="middle">40%</text>
+      <text x="450" y="200" text-anchor="middle">60%</text>
+    </g>
+    <line x1="0" y1="176" x2="520" y2="176" stroke="var(--line)" stroke-width="1"/>
+
+    <g font-family="-apple-system, Segoe UI, Roboto, sans-serif">
+      <text x="0" y="18" font-size="12.5" fill="var(--ink)">Undefended production models</text>
+      <rect x="0" y="26" width="491" height="22" fill="var(--bar-bg)"/>
+      <rect x="0" y="26" width="168" height="22" fill="var(--bar-crit)"/>
+      <text x="176" y="41" font-size="11.5" fill="var(--ink)" font-family="ui-monospace, Menlo, monospace">22.4% executed</text>
+      <text x="499" y="41" font-size="11.5" fill="var(--muted)" font-family="ui-monospace, Menlo, monospace">65.5%</text>
+
+      <text x="0" y="80" font-size="12.5" fill="var(--ink)">Warden loop · first rounds</text>
+      <rect x="0" y="88" width="60" height="22" fill="var(--bar-bg)"/>
+      <rect x="0" y="88" width="15" height="22" fill="var(--bar-crit)"/>
+      <text x="68" y="103" font-size="11.5" fill="var(--muted)" font-family="ui-monospace, Menlo, monospace">8.0% manipulated · 2.0% executed</text>
+
+      <text x="0" y="142" font-size="12.5" fill="var(--ink)">Warden loop · latest rounds</text>
+      <rect x="0" y="150" width="17" height="22" fill="var(--bar-bg)"/>
+      <rect x="0" y="150" width="2" height="22" fill="var(--bar-crit)"/>
+      <text x="25" y="165" font-size="11.5" fill="var(--good)" font-family="ui-monospace, Menlo, monospace">2.3% manipulated · 0.0% executed</text>
+    </g>
+  </svg>
+</div>
+<p class="legend">Grey bar = manipulated (agent proposed an out-of-scope call). Red bar = executed
+(the call passed the permission gate).</p>
+<p class="note">Undefended = 322 attacks across 7 models, policy <span class="mono">p48/s58</span>.
+Warden loop = run <span class="mono">warden-v3</span>, 862 attacks over 116 rounds against live
+models; first/latest are the means of the first and last quarter of rounds.</p>
+
+<p>Two failure modes are tracked separately because they have separate fixes.
+<strong>Intent</strong> is a prompt problem — the model was talked into wanting the wrong thing.
+<strong>Enforcement</strong> is a policy problem — the request got through the gate. Warden reduces
+both, and drives the one that causes real damage to zero.</p>
+
+<h2><span class="n">§1</span>Why this needs to exist</h2>
+<p>Every model below is a capable agent: it uses the tools, passes the benign suite, and refuses
+nothing legitimate. And every one of them, given a documented prompt-injection attack, executed a
+forbidden action roughly one time in five. The reliability gap is not the model's competence — it
+is its permission boundary.</p>
+
+<div class="tablewrap">
+<table>
+  <thead><tr>
+    <th>Model</th><th class="num">Attacks</th><th class="num">Manipulated</th>
+    <th class="num">Executed</th><th class="num">Benign</th><th class="num">Usable</th>
+  </tr></thead>
+  <tbody>
+    <tr><td class="mono">zai-org/GLM-5.2</td><td class="num">46</td><td class="num">65.2%</td><td class="exec">26.1%</td><td class="num">94.4%</td><td class="num">yes</td></tr>
+    <tr><td class="mono">Qwen/Qwen3-235B-A22B</td><td class="num">46</td><td class="num">71.7%</td><td class="exec">23.9%</td><td class="num">94.4%</td><td class="num">yes</td></tr>
+    <tr><td class="mono">moonshotai/Kimi-K2.6</td><td class="num">46</td><td class="num">65.2%</td><td class="exec">23.9%</td><td class="num">94.4%</td><td class="num">yes</td></tr>
+    <tr><td class="mono">deepseek-ai/DeepSeek-V3.1</td><td class="num">46</td><td class="num">69.6%</td><td class="exec">21.7%</td><td class="num">94.4%</td><td class="num">yes</td></tr>
+    <tr><td class="mono">meta-llama/Llama-3.1-8B</td><td class="num">46</td><td class="num">63.0%</td><td class="exec">21.7%</td><td class="num">94.4%</td><td class="num">yes</td></tr>
+    <tr><td class="mono">openai/gpt-oss-120b</td><td class="num">46</td><td class="num">63.0%</td><td class="exec">19.6%</td><td class="num">100.0%</td><td class="num">yes</td></tr>
+    <tr><td class="mono">meta-llama/Llama-3.3-70B</td><td class="num">46</td><td class="num">60.9%</td><td class="exec">19.6%</td><td class="num">94.4%</td><td class="num">yes</td></tr>
+  </tbody>
+</table>
+</div>
+<p class="note">Identical conditions per model: same 46 attacks, same undefended policy
+<span class="mono">p48/s58</span>, same 18-case benign suite, one model at a time. "Benign" is the
+share of legitimate requests still served. "Usable" means the model actually calls tools — a model
+that refuses everything would score zero on attacks and be useless as an agent.</p>
+
+<blockquote class="flag">
+  <span class="hd">What those breaches did, on the mocked target</span>
+  <p>Across the demo runs the successful attacks produced <strong>65 unauthorized refund rows
+  totalling $10,744</strong> and email exfiltration to <strong>9 addresses</strong>. Each is a real
+  Postgres row in the audit ledger, and none touched the outside world: no payment processor, no
+  SMTP. See §5.</p>
+</blockquote>
+
+<h2><span class="n">§2</span>How it works</h2>
+<p>The core design decision is a hard split between what is <em>true</em> and what is
+<em>enforced</em>. An immutable <strong>oracle</strong> defines, once, whether a given tool call is
+authorized. A separate, patchable <strong>policy engine</strong> is the gate the agent runs behind.
+The Defender may rewrite the policy and the system prompt freely — but it can
+<strong>never edit the oracle</strong>. So a rising score can only mean the gate genuinely
+improved, never that the test got easier.</p>
+
+<ul class="steps">
+  <li><b>Attacker</b> — 46 documented injection attacks across 15 families, paraphrased under an objective-preservation guard.</li>
+  <li><b>Target</b> — the toy agent handles each call; every call is judged twice, against the oracle (truth) and the policy (gate).</li>
+  <li><b>Analysis</b> — splits results into intent-rate and enforcement-rate, and isolates the leaking category.</li>
+  <li><b>Defender</b> — proposes a bounded, whitelist-only, hardening-direction patch to policy and prompt.</li>
+  <li><b>Benign gate</b> — the patch is kept only if normal behavior holds; otherwise it is reverted automatically, and the loop repeats.</li>
+</ul>
+
+<h3>What keeps the loop honest</h3>
+<ul>
+  <li><strong>Patches are fenced.</strong> The Defender can touch only a whitelist of checks, only within numeric bounds, and only in the hardening direction — plus a coherence guard so it cannot set a session cap below a per-call limit and quietly block legitimate work.</li>
+  <li><strong>Drift is reverted.</strong> A cumulative benign baseline catches patches that look fine alone but collectively erode normal behavior.</li>
+  <li><strong>Verification is separated.</strong> Patch-verification replays are recorded as their own action, so they never contaminate the attack metrics.</li>
+  <li><strong>Provider-agnostic.</strong> The same loop runs against Anthropic, any OpenAI-compatible endpoint, or deterministic simulated doubles. Live runs use W&amp;B Inference.</li>
+</ul>
+
+<h2><span class="n">§3</span>Results — the hardening run</h2>
+<dl class="kv">
+  <dt>Attacks</dt><dd>862 across 116 live rounds</dd>
+  <dt>Intent rate</dt><dd>8.0% &rarr; 2.3%</dd>
+  <dt>Executed rate</dt><dd>2.0% &rarr; 0.0%</dd>
+  <dt>Patches</dt><dd>23 applied · 7 held · 5 reverted</dd>
+  <dt>Modelled spend</dt><dd>$4.08</dd>
+</dl>
+<p>Over the run the loop drove the intent rate from 8.0% down to 2.3% and the executed-breach rate
+from 2.0% to 0.0%, applying 23 patches — of which 7 were verified and held, and 5 were
+automatically reverted when they failed to earn their keep.</p>
+
+<blockquote>
+  <span class="hd">The tradeoff, stated plainly</span>
+  <p>Hardening is not free. Benign competence started at <strong>0.944</strong> (17 of 18
+  legitimate cases served) and sits at <strong>0.833</strong> (15 of 18) in the latest rounds; the
+  drift guard reverted the patches that pushed it furthest, with the lowest observed point at
+  0.778. <strong>In its current state Warden trades about two of eighteen benign cases to take
+  executed breaches to zero.</strong> That cost is measured, governed and visible in the ledger
+  rather than hidden — and recovering those cases without giving back enforcement is what the loop
+  keeps working on.</p>
+</blockquote>
+
+<h2><span class="n">§4</span>Production readiness</h2>
+<p>The claim is not that it runs. It is that it already survived failure.</p>
+<ul>
+  <li><strong>It survived a real crash.</strong> The dev machine died mid-run. On restart the 44,023-row hash chain verified intact end to end, and the budget governor reaped 3 orphaned reservations left by the killed process. Recovery was automatic.</li>
+  <li><strong>Tamper-evident audit ledger.</strong> Append-only and hash-chained, with the chain computed server-side under a Postgres advisory lock and appends enforced by triggers and row-level security.</li>
+  <li><strong>Budget governor with a kill switch.</strong> Pre-flight reservation gate, drain mode, hard kill switch, a <span class="mono">reconcile</span> command, and a 1.25&times; pricing safety factor under a $70 ceiling.</li>
+  <li><strong>Real deployed infrastructure.</strong> Supabase Postgres holds all durable state; a stateless FastAPI service runs on Vercel serverless. No local-only shortcuts and no mock data.</li>
+  <li><strong>Instrumented and tested.</strong> Weave tracing on the hot path with a per-request flush for serverless; 101 tests across oracle, policy, patch guards, budget governor and ledger integrity.</li>
+</ul>
+
+<h2><span class="n">§5</span>Safety scope</h2>
+<p>Warden attacks only the toy Target Agent inside this project. All tools are mocked. Attack
+techniques are standard, documented prompt-injection and jailbreak categories used for defensive
+research — not novel attack R&amp;D. No external system, real user data, or production service is
+ever a target.</p>
+<p>Refunds and emails write <em>real</em> Postgres rows so the damage is measurable and auditable,
+but every one carries <span class="mono">external_dispatch = not_dispatched</span>. There is no
+payment processor and no SMTP behind them. The blast radius is a database table.</p>
+
+<h2><span class="n">§6</span>Sponsor stack</h2>
+<ul>
+  <li><strong>Weave (W&amp;B)</strong> — every model call on the <span class="mono">/v1/chat</span> path is a traced op, so any run is reconstructable in the Weave UI.</li>
+  <li><strong>ARIA</strong> — the analysis layer over those traces, queried in natural language during the demo.</li>
+  <li><strong>W&amp;B Inference</strong> — the seven benchmarked models and the live hardening run all go through the OpenAI-compatible endpoint on the same W&amp;B key.</li>
+  <li><strong>marimo / molab</strong> — the live dashboard is a reactive notebook reading straight from Supabase, with an interactive attack console and policy explorer.</li>
+  <li><strong>CoreWeave</strong> — the compute substrate underneath the inference.</li>
+</ul>
+
+<h2><span class="n">§7</span>How to evaluate it</h2>
+<ul>
+  <li><strong>Source</strong> — <a href="https://github.com/ARP-source/warden">github.com/ARP-source/warden</a></li>
+  <li><strong>Deployed API</strong> — <a href="https://warden-beryl.vercel.app">warden-beryl.vercel.app</a> (<span class="mono">/healthz</span> reports config, <span class="mono">/v1/chat</span> accepts an attack)</li>
+  <li><strong>Live dashboard</strong> — <a href="https://molab.marimo.io/notebooks/nb_Pxk1VkWyH1hVZsn6PBA9Cz/app">molab notebook</a>, reading straight from Supabase</li>
+  <li><strong>Traces</strong> — the Weave project on <a href="https://wandb.ai">wandb.ai</a></li>
+</ul>
+
+<h3>Verify the headline claims locally</h3>
+<pre><span class="c"># the ledger chain is intact end to end (the crash-survival claim)</span>
+warden verify-chain
+
+<span class="c"># the guardrails and integrity invariants hold — 101 tests</span>
+python -m pytest tests/ -q
+
+<span class="c"># reproduce the seven-model benchmark table (§1)</span>
+python benchmark_models.py</pre>
+
+<h3>The attack catalogue</h3>
+<p>46 attacks across 15 families, grounded in the published prompt-injection literature
+(including arXiv 2510.06445): system-prompt forgery, pseudo-conversation, encoding and
+obfuscation, many-shot, reasoning injection, payload splitting, tool-output injection, refusal
+suppression, and crescendo — each with paraphrase variants that preserve the attack's objective,
+so paraphrasing cannot accidentally defang the test.</p>
+
+<footer>
+  <p>Warden — Agent Permission Immune System · build <span class="mono">demo-base-v1</span> ·
+  figures from run <span class="mono">warden-v3</span> and benchmark
+  <span class="mono">warden-modelcmp</span> · 2026-09-13.</p>
+  <p>Every number is drawn from the hash-verified audit ledger. Where a tradeoff exists — notably
+  the benign-competence cost in §3 — it is stated rather than smoothed.</p>
+</footer>
+
+</div>
+</body>
+</html>
