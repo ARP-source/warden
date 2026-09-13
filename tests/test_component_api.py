@@ -80,3 +80,33 @@ def test_run_benign_suite_accepts_the_client_the_loop_passes():
     sig = inspect.signature(run_benign_suite)
     assert "client" in sig.parameters
     assert "concurrency" in sig.parameters
+
+
+def test_blank_environment_variables_are_treated_as_unset(monkeypatch):
+    """A declared-but-blank variable must not override a default.
+
+    Hosting dashboards routinely store a variable with an empty value.
+    os.environ.get then returns "" rather than the configured default, which
+    made WARDEN_MODE fail validation and would have crashed the deployed
+    service on boot.
+    """
+    from warden.config import env_str, load_config, resolved_provider, resolved_store
+
+    for name in ("WARDEN_MODE", "ANTHROPIC_API_KEY", "WARDEN_WEAVE_PROJECT",
+                 "WARDEN_STORE", "WARDEN_OPENAI_BASE_URL", "WANDB_ENTITY",
+                 "SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY"):
+        monkeypatch.setenv(name, "")
+
+    assert env_str("WARDEN_MODE", "auto") == "auto"
+    cfg = load_config()
+    assert cfg.mode == "auto", "a blank mode must fall back, not fail validation"
+    assert resolved_provider(cfg) == "simulated"
+    assert resolved_store() == "sqlite"
+    assert cfg.weave.project, "a blank project name must fall back to the default"
+
+
+def test_whitespace_only_environment_variables_are_also_unset(monkeypatch):
+    from warden.config import env_str
+
+    monkeypatch.setenv("WARDEN_MODE", "   ")
+    assert env_str("WARDEN_MODE", "auto") == "auto"

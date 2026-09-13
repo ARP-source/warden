@@ -198,6 +198,18 @@ class Config:
         return getattr(table, role)
 
 
+def env_str(name: str, default: str = "") -> str:
+    """Read an environment variable, treating an empty value as unset.
+
+    Hosting dashboards routinely store a declared-but-blank variable, and
+    os.environ.get then returns "" rather than the default. That blank went on
+    to fail mode validation and would have crashed the deployed service on
+    boot. Absent and blank mean the same thing here.
+    """
+    value = os.environ.get(name)
+    return value.strip() if value and value.strip() else default
+
+
 def _env_float(name: str, default: float) -> float:
     raw = os.environ.get(name)
     if raw is None or not raw.strip():
@@ -228,11 +240,11 @@ def load_config(path: Path | str | None = None) -> Config:
         for name, v in raw.get("pricing", {}).items()
     }
 
-    mode = os.environ.get("WARDEN_MODE", raw["run"]["mode"]).strip().lower()
+    mode = env_str("WARDEN_MODE", raw["run"]["mode"]).strip().lower()
     if mode not in {"auto", "live", "simulated"}:
         raise ValueError("invalid run mode " + repr(mode) + "; expected auto|live|simulated")
 
-    weave_enabled = bool(raw["weave"]["enabled"]) and os.environ.get(
+    weave_enabled = bool(raw["weave"]["enabled"]) and env_str(
         "WARDEN_WEAVE_DISABLED", ""
     ).lower() not in {"1", "true", "yes"}
 
@@ -262,18 +274,18 @@ def load_config(path: Path | str | None = None) -> Config:
         models=ModelsConfig(**raw["models"]),
         models_openai=ModelsConfig(**raw.get("models_openai", raw["models"])),
         inference=InferenceConfig(
-            provider=os.environ.get(
+            provider=env_str(
                 "WARDEN_INFERENCE", raw.get("inference", {}).get("provider", "auto")
-            ).strip().lower(),
-            base_url=(os.environ.get("WARDEN_OPENAI_BASE_URL")
-                      or raw.get("inference", {}).get("base_url", "")).strip(),
+            ).lower(),
+            base_url=env_str("WARDEN_OPENAI_BASE_URL",
+                             raw.get("inference", {}).get("base_url", "")),
             api_key_envs=tuple(raw.get("inference", {}).get(
                 "api_key_envs",
                 ["WARDEN_OPENAI_API_KEY", "WANDB_API_KEY", "OPENAI_API_KEY"])),
         ),
         pricing=pricing,
         target=TargetConfig(
-            host=os.environ.get("WARDEN_TARGET_HOST", raw["target"]["host"]),
+            host=env_str("WARDEN_TARGET_HOST", raw["target"]["host"]),
             port=_env_int("WARDEN_TARGET_PORT", int(raw["target"]["port"])),
             max_tool_iterations=int(raw["target"]["max_tool_iterations"]),
             max_output_tokens=int(raw["target"]["max_output_tokens"]),
@@ -296,7 +308,7 @@ def load_config(path: Path | str | None = None) -> Config:
             min_acceptable_score=float(raw["eval"]["min_acceptable_score"]),
         ),
         weave=WeaveConfig(
-            project=os.environ.get("WARDEN_WEAVE_PROJECT", raw["weave"]["project"]),
+            project=env_str("WARDEN_WEAVE_PROJECT", raw["weave"]["project"]),
             enabled=weave_enabled,
         ),
         paths=dict(raw["paths"]),
@@ -325,7 +337,7 @@ def resolved_provider(cfg: Config | None = None) -> str:
             "invalid inference.provider " + repr(choice)
             + "; expected auto|anthropic|openai|simulated"
         )
-    if os.environ.get("ANTHROPIC_API_KEY"):
+    if env_str("ANTHROPIC_API_KEY"):
         return "anthropic"
     if cfg.inference.base_url:
         # A local endpoint such as Ollama needs no key.
@@ -353,11 +365,10 @@ def resolved_store() -> str:
     not a silent one: the choice appears in the run summary, on the health
     endpoint, and in the posture report.
     """
-    choice = os.environ.get("WARDEN_STORE", "auto").strip().lower()
+    choice = env_str("WARDEN_STORE", "auto").lower()
     if choice not in {"auto", "supabase", "sqlite"}:
         choice = "auto"
-    have_supabase = bool(os.environ.get("SUPABASE_URL")
-                         and os.environ.get("SUPABASE_SERVICE_ROLE_KEY"))
+    have_supabase = bool(env_str("SUPABASE_URL") and env_str("SUPABASE_SERVICE_ROLE_KEY"))
     if choice == "supabase":
         if not have_supabase:
             raise ValueError(

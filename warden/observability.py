@@ -57,7 +57,7 @@ def init(project: str | None = None, force: bool = False) -> dict[str, Any]:
         if not cfg.weave.enabled:
             _status = {"enabled": False, "reason": "disabled in config", "project": project}
             return _status
-        if not os.environ.get("WANDB_API_KEY"):
+        if not (os.environ.get("WANDB_API_KEY") or "").strip():
             _status = {
                 "enabled": False,
                 "reason": "WANDB_API_KEY is not set; tracing is off and the ledger "
@@ -80,7 +80,7 @@ def init(project: str | None = None, force: bool = False) -> dict[str, Any]:
 
             import weave  # type: ignore
 
-            entity = os.environ.get("WANDB_ENTITY")
+            entity = (os.environ.get("WANDB_ENTITY") or "").strip() or None
             target = f"{entity}/{project}" if entity else project
             weave.init(target)
             _weave = weave
