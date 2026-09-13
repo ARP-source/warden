@@ -130,6 +130,7 @@ def healthz() -> dict[str, Any]:
         "uptime_s": round(time.time() - START_TIME, 1),
         "mode": resolved_mode(cfg),
         "store": resolved_store(),
+        "store_note": getattr(ledger, "mirror_note", ""),
         "run_id": ledger.run_id,
         "tracing": obs.summary_for_health(),
         "versions": {

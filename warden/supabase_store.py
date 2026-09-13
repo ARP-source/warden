@@ -57,9 +57,20 @@ class SupabaseLedger:
         self.client = client or SupabaseClient()
         self.run_id = run_id or os.environ.get("WARDEN_RUN_ID") or f"run-{uuid.uuid4().hex[:12]}"
         # A local JSON Lines mirror is kept as a second, independent copy so a
-        # network outage cannot silently lose audit history.
+        # network outage cannot silently lose audit history. It is a
+        # convenience, not a requirement: a serverless filesystem is read-only,
+        # and refusing to start there would defeat the point of putting the
+        # ledger in Postgres in the first place. Postgres is the system of
+        # record either way.
         self.mirror_path = Path(mirror_path) if mirror_path else self.cfg.ledger_jsonl
-        self.mirror_path.parent.mkdir(parents=True, exist_ok=True)
+        self.mirror_enabled = True
+        self.mirror_note = "local JSONL mirror active"
+        try:
+            self.mirror_path.parent.mkdir(parents=True, exist_ok=True)
+        except OSError as exc:
+            self.mirror_enabled = False
+            self.mirror_note = (f"local mirror disabled ({exc.strerror or exc}); "
+                                f"Postgres remains the system of record")
         self._lock = threading.Lock()
 
     def close(self) -> None:
@@ -91,6 +102,8 @@ class SupabaseLedger:
         return stored
 
     def _mirror(self, entry: LedgerEntry) -> None:
+        if not self.mirror_enabled:
+            return
         try:
             with self._lock, open(self.mirror_path, "a", encoding="utf-8") as fh:
                 fh.write(canonical_json(entry.to_row()) + "\n")

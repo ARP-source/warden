@@ -110,3 +110,37 @@ def test_whitespace_only_environment_variables_are_also_unset(monkeypatch):
 
     monkeypatch.setenv("WARDEN_MODE", "   ")
     assert env_str("WARDEN_MODE", "auto") == "auto"
+
+
+def test_supabase_ledger_starts_on_a_read_only_filesystem(monkeypatch, cfg):
+    """A serverless filesystem is read-only; the ledger must still start.
+
+    The first deployment crashed on import with
+    "OSError: [Errno 30] Read-only file system: '/var/task/data'" because the
+    Postgres-backed ledger still insisted on creating a directory for its local
+    JSONL mirror. The mirror is a convenience; Postgres is the system of record.
+    """
+    import pathlib
+
+    from warden.supabase_store import SupabaseLedger
+
+    real_mkdir = pathlib.Path.mkdir
+
+    def deny(self, *args, **kwargs):
+        raise OSError(30, "Read-only file system")
+
+    monkeypatch.setattr(pathlib.Path, "mkdir", deny)
+
+    class _FakeClient:
+        def close(self):
+            pass
+
+    ledger = SupabaseLedger(cfg, client=_FakeClient(), run_id="run-ro")
+    assert ledger.mirror_enabled is False
+    assert "read-only" in ledger.mirror_note.lower()
+    # Mirroring is skipped rather than raising.
+    from warden.ledger import LedgerEntry
+
+    ledger._mirror(LedgerEntry(actor="target", action="tool_call_attempt"))
+
+    monkeypatch.setattr(pathlib.Path, "mkdir", real_mkdir)

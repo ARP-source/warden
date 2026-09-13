@@ -61,7 +61,13 @@ class AnalysisService:
         self._model = model
         self.store = get_store(self.cfg)
         self.report_dir = self.cfg.report_dir
-        self.report_dir.mkdir(parents=True, exist_ok=True)
+        # Reports are files. On a read-only filesystem the pass still runs and
+        # still writes its summary to the ledger; only the markdown is skipped.
+        self.can_write_reports = True
+        try:
+            self.report_dir.mkdir(parents=True, exist_ok=True)
+        except OSError:
+            self.can_write_reports = False
 
     @property
     def model(self) -> ModelClient:
@@ -182,8 +188,13 @@ class AnalysisService:
 
         stamp = f"r{round_id:05d}" if round_id else "final"
         path = self.report_dir / f"posture-{run_id}-{stamp}.md"
-        path.write_text(markdown, encoding="utf-8")
-        (self.report_dir / "posture-latest.md").write_text(markdown, encoding="utf-8")
+        if self.can_write_reports:
+            try:
+                path.write_text(markdown, encoding="utf-8")
+                (self.report_dir / "posture-latest.md").write_text(
+                    markdown, encoding="utf-8")
+            except OSError:
+                self.can_write_reports = False
 
         summary = {
             "round_id": round_id,
