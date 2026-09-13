@@ -1,6 +1,6 @@
 # /// script
 # requires-python = ">=3.11"
-# dependencies = ["marimo", "altair==5.*", "pandas==2.*", "httpx==0.*"]
+# dependencies = ["marimo==0.24.2", "altair==5.*", "pandas==2.*", "httpx==0.*", "pyarrow"]
 # ///
 """Warden live dashboard, standalone for molab.
 
@@ -18,7 +18,7 @@ see everything the loop did and change none of it.
 """
 import marimo
 
-__generated_with = "0.9.0"
+__generated_with = "0.24.2"
 app = marimo.App(width="full", app_title="Warden - Agent Permission Immune System")
 
 
@@ -572,7 +572,7 @@ def _console_controls(attack_choice, custom_msg, fire, mo, model_choice):
 
 
 @app.cell
-def _console_fire(_render_shot, attack_choice, custom_msg, fire, mo, model_choice):
+def _console_fire(render_shot, attack_choice, custom_msg, fire, mo, model_choice):
     import httpx as _httpx
 
     TARGET = "https://warden-beryl.vercel.app"
@@ -657,7 +657,7 @@ def _console_fire(_render_shot, attack_choice, custom_msg, fire, mo, model_choic
         except Exception as exc:
             shot_err = str(exc)
 
-        out = _render_shot(mo, model_choice.value, msgs, shot_attempts, shot_reply,
+        out = render_shot(mo, model_choice.value, msgs, shot_attempts, shot_reply,
                            shot_err, shot_enf if not shot_err else False,
                            shot_int if not shot_err else False)
     return (out,)
@@ -665,7 +665,7 @@ def _console_fire(_render_shot, attack_choice, custom_msg, fire, mo, model_choic
 
 @app.cell
 def _render_shot_def(mo):
-    def _render_shot(mo, model, msgs, attempts, reply, err, breach_enf, breach_int):
+    def render_shot(mo, model, msgs, attempts, reply, err, breach_enf, breach_int):
         if err:
             return mo.md("**Error calling the deployed Target:** `" + err + "`")
         if breach_enf:
@@ -704,7 +704,7 @@ def _render_shot_def(mo):
             lines += ["", "**Model reply:**", "", "> " + reply[:280]]
         return mo.md("\n".join(lines))
 
-    return (_render_shot,)
+    return (render_shot,)
 
 
 @app.cell
