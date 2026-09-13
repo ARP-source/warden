@@ -60,3 +60,32 @@ def test_attack_sessions_are_unique_per_attempt():
 
     src = inspect.getsource(AttackerAgent.run_attack)
     assert "uuid" in src, "attack sessions need a unique suffix per attempt"
+
+
+def test_patch_verification_replays_are_not_counted_as_attacks():
+    """A replay is expected to be blocked, so counting it as an attack would
+    drag the headline success rate down for a reason unrelated to the attacker.
+    """
+    import inspect
+
+    from attacker.agent import AttackerAgent
+    from warden.ledger import ACT_ATTACK_ATTEMPT, ACT_PATCH_PROBE
+
+    assert ACT_PATCH_PROBE != ACT_ATTACK_ATTEMPT
+    src = inspect.getsource(AttackerAgent.run_attack)
+    assert "verification" in src and "ACT_PATCH_PROBE" in src
+
+    # The metrics layer keys on the attack action, so a probe cannot leak in.
+    metrics_src = inspect.getsource(__import__("warden.metrics", fromlist=["x"]))
+    assert "ACT_PATCH_PROBE" not in metrics_src, (
+        "attack metrics must not read patch probes"
+    )
+
+
+def test_defender_marks_its_replay_as_verification():
+    import inspect
+
+    from defender.agent import DefenderAgent
+
+    src = inspect.getsource(DefenderAgent._defend_inner)
+    assert "verification=True" in src

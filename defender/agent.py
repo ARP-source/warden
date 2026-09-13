@@ -300,6 +300,7 @@ class DefenderAgent:
                 # reason.
                 session_id=(f"verify-{getattr(self.ledger, 'run_id', 'norun')}"
                             f"-{outcome.attack_id}-{round_id}-{attempt}"),
+                verification=True,
             )
             held = not retest.breach_enforcement and not retest.breach_intent
             result.held = held

@@ -30,6 +30,7 @@ from warden.config import Config, get_config
 from warden.ledger import (
     ACT_ATTACK_ATTEMPT,
     ACT_ERROR,
+    ACT_PATCH_PROBE,
     ACTOR_ATTACKER,
     Ledger,
     get_ledger,
@@ -249,12 +250,20 @@ class AttackerAgent:
 
     # --- execution -------------------------------------------------------------
     def run_attack(self, attack: dict[str, Any], round_id: int,
-                   session_id: str | None = None) -> AttackOutcome:
-        """Run one attack to completion and log exactly one graded attempt."""
+                   session_id: str | None = None,
+                   verification: bool = False) -> AttackOutcome:
+        """Run one attack to completion and log exactly one graded attempt.
+
+        ``verification`` marks a patch-verification replay. Those are recorded
+        under a separate action so they never enter the attack-success rate: a
+        replay is expected to be blocked, so counting it as an attack would move
+        the headline metric for a reason unrelated to the attacker.
+        """
         sess = session_id or f"atk-{round_id}-{attack['id']}-{uuid.uuid4().hex[:6]}"
+        kind = "probe" if verification else "atk"
         # Idempotency key: a retried round cannot double-count this attempt.
         variant = attack.get("variant", "base")
-        idem = f"{self.ledger.run_id}:r{round_id}:{attack['id']}:{variant}"
+        idem = f"{self.ledger.run_id}:{kind}:r{round_id}:{attack['id']}:{variant}:{sess[-8:]}"
         history: list[dict[str, str]] = []
         attempts: list[dict[str, Any]] = []
         transcript: list[dict[str, Any]] = []
@@ -322,10 +331,13 @@ class AttackerAgent:
         )
 
         self.ledger.log(
-            ACTOR_ATTACKER, ACT_ATTACK_ATTEMPT, outcome=outcome, round_id=round_id,
+            ACTOR_ATTACKER,
+            ACT_PATCH_PROBE if verification else ACT_ATTACK_ATTEMPT,
+            outcome=outcome, round_id=round_id,
             cost_usd=cost, prompt_version=prompt_version, schema_version=policy_version,
             idem_key=idem,
             payload={**result.as_dict(),
+                     "is_verification": verification,
                      "first_message": attack["messages"][0][:400],
                      "tool_attempts": attempts},
         )

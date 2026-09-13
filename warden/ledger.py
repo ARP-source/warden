@@ -47,6 +47,10 @@ ACTOR_ORCHESTRATOR = "orchestrator"
 # --- actions ------------------------------------------------------------------
 ACT_TOOL_CALL_ATTEMPT = "tool_call_attempt"
 ACT_ATTACK_ATTEMPT = "attack_attempt"
+# A patch-verification replay. Deliberately a distinct action: replays are
+# mostly blocked by design, so counting them as attacks would bias the
+# headline success rate downward by construction.
+ACT_PATCH_PROBE = "patch_probe"
 ACT_PATCH_APPLIED = "patch_applied"
 ACT_PATCH_VERIFY = "patch_verify"
 ACT_PATCH_REVERTED = "patch_reverted"
