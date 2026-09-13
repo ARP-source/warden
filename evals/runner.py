@@ -20,6 +20,7 @@ of kind: on benign traffic that is a security failure, not a style question.
 from __future__ import annotations
 
 import uuid
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -182,7 +183,8 @@ def score_case(case: dict[str, Any], data: dict[str, Any]) -> CaseScore:
 def run_benign_suite(client: Any, *, run_label: str = "", round_id: int | None = None,
                      ledger: Ledger | None = None, idem_prefix: str | None = None,
                      case_ids: list[str] | None = None, cfg: Any = None,
-                     versions: dict[str, str] | None = None) -> EvalReport:
+                     versions: dict[str, str] | None = None,
+                     concurrency: int = 6) -> EvalReport:
     """Run the suite against the deployed Target.
 
     ``client`` is anything with a ``chat(payload) -> dict`` method, which in
@@ -207,23 +209,44 @@ def run_benign_suite(client: Any, *, run_label: str = "", round_id: int | None =
     # Postgres, so a label reused by a later run would inherit the earlier
     # run's cumulative refund total and score legitimate requests as breaches.
     run_tag = getattr(ledger, "run_id", "norun")
-    for case in cases:
-        session = f"eval-{run_tag}-{label}-{case['id']}"
+    def run_one(case: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any] | None, str]:
+        """Run a single case. Returns (case, response, error)."""
         payload = {
             "messages": [{"role": "user", "content": m} for m in case["messages"]],
-            "session_id": session,
+            "session_id": f"eval-{run_tag}-{label}-{case['id']}",
             "customer_id": case["customer_id"],
             "round_id": round_id,
             "idem_prefix": (f"{idem_prefix}:{case['id']}" if idem_prefix else None),
             "tags": {"eval_case": case["id"], "eval_label": label},
         }
         try:
-            data = client.chat(payload)
+            return case, client.chat(payload), ""
         except Exception as exc:
-            # A governor halt or an unreachable Target mid-suite leaves a partial
-            # result. A partial suite is not comparable to a full one, so it is
-            # recorded as partial rather than averaged in silently.
-            stopped = f"{type(exc).__name__}: {exc}"
+            return case, None, f"{type(exc).__name__}: {exc}"
+
+    # Cases are independent: each has its own session and touches no shared
+    # state, so they run concurrently. The suite is the slowest part of a patch
+    # cycle and it runs after every patch, so serialising it would throttle the
+    # whole loop. Concurrency is modest to stay friendly to the endpoint.
+    results: list[tuple[dict[str, Any], dict[str, Any] | None, str]] = []
+    if concurrency > 1 and len(cases) > 1:
+        with ThreadPoolExecutor(max_workers=concurrency) as pool:
+            futures = {pool.submit(run_one, c): c for c in cases}
+            for fut in as_completed(futures):
+                results.append(fut.result())
+    else:
+        results = [run_one(c) for c in cases]
+
+    # Score in the suite's declared order, not in completion order, so the
+    # per-case list is comparable between runs.
+    by_id = {c["id"]: (resp, err) for c, resp, err in results}
+    for case in cases:
+        data, err = by_id.get(case["id"], (None, "not run"))
+        if data is None:
+            # A governor halt or an unreachable Target leaves a partial result.
+            # A partial suite is not comparable to a full one, so it is recorded
+            # as partial rather than averaged in silently.
+            stopped = err or "no response"
             break
         cost += float(data.get("cost_usd") or 0.0)
         prompt_version = data.get("prompt_version", prompt_version)

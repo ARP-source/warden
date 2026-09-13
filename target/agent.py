@@ -141,6 +141,11 @@ class TargetAgent:
         # Without this, a cumulative-limit attack could never be tested.
         self._sessions: OrderedDict[str, tools_mod.ToolRuntime] = OrderedDict()
         self._sessions_lock = threading.Lock()
+        # Requests are served concurrently, so swapping the active prompt and
+        # policy must be atomic. Without this a request could read a new prompt
+        # against an old policy and be judged under versions that never
+        # co-existed.
+        self._reload_lock = threading.RLock()
         self.max_sessions = 500
         self.bootstrap()
 
@@ -163,13 +168,21 @@ class TargetAgent:
         s_m = self.store.pointer_mtime(KIND_POLICY)
         if not force and p_m == self._prompt_mtime and s_m == self._policy_mtime:
             return False
-        prompt_ver = self.store.active(KIND_PROMPT)
-        policy_ver = self.store.active(KIND_POLICY)
-        self._prompt_doc = prompt_mod.validate_prompt(prompt_ver.content)
-        self._prompt_version = prompt_ver.version
-        self._policy = PolicyEngine(validate_policy(policy_ver.content), policy_ver.version)
-        self._prompt_mtime, self._policy_mtime = p_m, s_m
-        return True
+        with self._reload_lock:
+            # Re-check inside the lock: another thread may have just reloaded.
+            if not force and p_m == self._prompt_mtime and s_m == self._policy_mtime:
+                return False
+            prompt_ver = self.store.active(KIND_PROMPT)
+            policy_ver = self.store.active(KIND_POLICY)
+            prompt_doc = prompt_mod.validate_prompt(prompt_ver.content)
+            policy = PolicyEngine(validate_policy(policy_ver.content), policy_ver.version)
+            # Publish the pair together, after both have validated, so a reader
+            # never sees a half-applied patch.
+            self._prompt_doc = prompt_doc
+            self._prompt_version = prompt_ver.version
+            self._policy = policy
+            self._prompt_mtime, self._policy_mtime = p_m, s_m
+            return True
 
     @property
     def prompt_version(self) -> str:
@@ -181,7 +194,14 @@ class TargetAgent:
         return self._policy
 
     def versions(self) -> dict[str, str]:
-        return {"prompt_version": self._prompt_version, "policy_version": self.policy.version}
+        with self._reload_lock:
+            return {"prompt_version": self._prompt_version,
+                    "policy_version": self.policy.version}
+
+    def active_pair(self) -> tuple[dict[str, Any], str, PolicyEngine]:
+        """Prompt, its version, and policy, read as one consistent snapshot."""
+        with self._reload_lock:
+            return self._prompt_doc, self._prompt_version, self.policy
 
     def _runtime_for(self, session_id: str) -> tools_mod.ToolRuntime:
         """Fetch or create the tool state for a session, with a bounded cache."""
@@ -211,9 +231,10 @@ class TargetAgent:
                tags: dict[str, Any] | None = None) -> TargetResult:
         """Run one conversation to completion and return every judgement made."""
         self.reload()
+        prompt_doc, prompt_version, policy = self.active_pair()
         rt = self._runtime_for(scope.session_id)
-        rt.prompt_version = self._prompt_version
-        rt.policy_version = self.policy.version
+        rt.prompt_version = prompt_version
+        rt.policy_version = policy.version
         # Judge this turn against what the session has already spent. The store
         # owns that total, so a conversation spread over several requests, or
         # several service instances, is judged against the same running figure.
@@ -222,7 +243,7 @@ class TargetAgent:
         except Exception:
             pass
         live_scope = _with_refunded(scope, rt.refunded_usd)
-        system = prompt_mod.render(self._prompt_doc, live_scope, self._prompt_version)
+        system = prompt_mod.render(prompt_doc, live_scope, prompt_version)
         convo: list[dict[str, Any]] = [
             {"role": m["role"], "content": m["content"]} for m in messages
         ]

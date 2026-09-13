@@ -18,6 +18,7 @@ from __future__ import annotations
 import random
 import time
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -330,27 +331,62 @@ class AttackerAgent:
         )
         return result
 
-    def run_round(self, round_id: int, n: int = 5) -> list[AttackOutcome]:
-        """Run one round of attacks. Governor refusals propagate to the caller."""
+    def run_round(self, round_id: int, n: int = 5,
+                  concurrency: int = 3) -> list[AttackOutcome]:
+        """Run one round of attacks. Governor refusals propagate to the caller.
+
+        Attacks in a round are independent: each opens its own session against
+        the Target and shares no state with the others, so they run
+        concurrently. The governor, the ledger and the session store are all
+        serialised internally, so the only thing concurrency changes is
+        wall-clock time.
+        """
         self.governor.mark_round(round_id)
+        selected = self.select(n, round_id)
         results: list[AttackOutcome] = []
+        halted: GovernorStop | None = None
         round_span = obs.span("round", round_id=round_id, attacks_planned=n)
         round_span.__enter__()
-        for attack in self.select(n, round_id):
+
+        def one(attack: dict[str, Any]):
             try:
-                results.append(self.run_attack(attack, round_id))
+                return self.run_attack(attack, round_id), None
             except TargetHalted as exc:
                 self.ledger.log(
-                    ACTOR_ATTACKER, ACT_ERROR, outcome="target_halted", round_id=round_id,
+                    ACTOR_ATTACKER, ACT_ERROR, outcome="target_halted",
+                    round_id=round_id,
                     payload={"reason": exc.reason, "attack_id": attack["id"]},
                 )
-                round_span.__exit__(None, None, None)
-                raise GovernorStop(str(exc), reason=exc.reason, detail=exc.detail) from exc
+                return None, GovernorStop(str(exc), reason=exc.reason, detail=exc.detail)
             except Exception as exc:
                 # One broken attack must not abort the round.
                 self.ledger.log(
-                    ACTOR_ATTACKER, ACT_ERROR, outcome="attack_failed", round_id=round_id,
+                    ACTOR_ATTACKER, ACT_ERROR, outcome="attack_failed",
+                    round_id=round_id,
                     payload={"attack_id": attack["id"], "error": str(exc)[:400]},
                 )
-        round_span.__exit__(None, None, None)
+                return None, None
+
+        try:
+            if concurrency > 1 and len(selected) > 1:
+                with ThreadPoolExecutor(max_workers=concurrency) as pool:
+                    for outcome, stop in pool.map(one, selected):
+                        if outcome is not None:
+                            results.append(outcome)
+                        if stop is not None and halted is None:
+                            halted = stop
+            else:
+                for attack in selected:
+                    outcome, stop = one(attack)
+                    if outcome is not None:
+                        results.append(outcome)
+                    if stop is not None and halted is None:
+                        halted = stop
+        finally:
+            round_span.__exit__(None, None, None)
+
+        if halted is not None:
+            # Surfaced only after the round finishes, so attacks already in
+            # flight still record their outcomes before the run winds down.
+            raise halted
         return results
