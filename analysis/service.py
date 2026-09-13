@@ -47,9 +47,16 @@ class AnalysisService:
     """Periodic clustering, reporting and regression verification."""
 
     def __init__(self, cfg: Config | None = None, ledger: Any = None,
-                 model: ModelClient | None = None):
+                 model: ModelClient | None = None, run_id: str | None = None):
+        import os
+
         self.cfg = cfg or get_config()
         self.ledger = ledger or get_ledger(self.cfg)
+        # A report is about a run. The orchestrator passes its own; a standalone
+        # invocation has no run of its own, and defaulting to a freshly minted
+        # id would filter every metric to nothing and render a report that looks
+        # like a clean bill of health.
+        self.run_id = run_id or os.environ.get("WARDEN_RUN_ID") or self.ledger.run_id
         self._model = model
         self.store = get_store(self.cfg)
         self.report_dir = self.cfg.report_dir
@@ -86,8 +93,16 @@ class AnalysisService:
 
     # --- the pass --------------------------------------------------------------
     def run(self, round_id: int | None = None, target: Any = None,
-            window_rounds: int | None = None) -> dict[str, Any]:
-        run_id = self.ledger.run_id
+            window_rounds: int | None = None,
+            run_id: str | None = None) -> dict[str, Any]:
+        run_id = run_id or self.run_id
+        if not metrics.attack_stats_any(self.ledger, run_id)["attempts"]:
+            # This run has recorded nothing, so this is a reader with no run of
+            # its own. Report on the most recent run that has data, and say so:
+            # the run id is printed at the top of the report.
+            newest = metrics.latest_run_id(self.ledger)
+            if newest and newest != run_id:
+                run_id = newest
         since = max(1, round_id - window_rounds) if (window_rounds and round_id) else None
 
         clusters = cluster_successes(self.ledger, run_id=run_id, since_round=since)
