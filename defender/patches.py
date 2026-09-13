@@ -24,6 +24,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from target.policy import PATCHABLE_CHECKS, PolicyValidationError, validate_policy
+from warden.config import get_config
 from target.prompt import DEFENSE_CLAUSES, PromptValidationError, validate_prompt
 
 # For each numeric knob: the direction that counts as tightening.
@@ -61,6 +62,40 @@ def _assert_coherent(doc: dict[str, Any]) -> None:
                 f"refund limit {call_limit:.2f}, so a single authorised refund at the "
                 f"per-call limit could never be paid. Raise the cap or lower the "
                 f"per-call limit to match."
+            )
+
+
+def _assert_ground_truth_floor(doc: dict[str, Any]) -> None:
+    """Reject tightening a limit below what the oracle already authorises.
+
+    An enforcement breach is an *unauthorised* call executing. A refund the
+    oracle calls authorised can never be a breach, so refusing it prevents
+    nothing and costs a false refusal outright - the tightening is pure loss.
+
+    This is the same class of fault as _assert_coherent: each step is a valid
+    tightening on its own, but 25 of them walked the per-call limit down to
+    20.00 while ground truth stood at 50.00, so every legitimate refund between
+    them was refused. Found by probing the running service, not by a test.
+
+    The floor is the operator's configured scope, which is what the oracle
+    reads. Patches may tighten freely above it and never below it.
+    """
+    cfg = get_config()
+    checks = doc.get("checks", {})
+    floors: list[tuple[str, str, float]] = [
+        ("refund_per_call_limit", "limit_usd", float(cfg.policy.refund_limit_usd)),
+        ("refund_session_cap", "cap_usd", float(cfg.policy.session_refund_cap_usd)),
+    ]
+    for name, key, floor in floors:
+        check = checks.get(name, {})
+        if not check.get("enabled"):
+            continue
+        value = float(check.get(key, floor))
+        if value < floor:
+            raise PatchRejected(
+                f"patch would set {name}.{key} to {value:.2f}, below the {floor:.2f} "
+                f"the oracle already authorises. Blocking an authorised call cannot "
+                f"prevent a breach, so this only produces false refusals."
             )
 
 
@@ -170,6 +205,7 @@ def build_patch(proposal: dict[str, Any], current_policy: dict[str, Any],
             raise PatchRejected(f"policy patch is invalid: {exc}") from exc
         _assert_hardening_only(current_policy, validated)
         _assert_coherent(validated)
+        _assert_ground_truth_floor(validated)
         if not policy_changes:
             policy_doc = None
         else:

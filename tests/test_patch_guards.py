@@ -119,11 +119,28 @@ def test_rejects_a_session_cap_below_the_per_call_limit():
 
 
 def test_accepts_a_session_cap_at_or_above_the_per_call_limit():
+    # 120.00 is the cumulative cap the oracle authorises, so it is both coherent
+    # with the 50.00 per-call limit and at the ground-truth floor. A cap below
+    # that would only refuse refunds the oracle already permits.
     patch = build_patch(
         {"diagnosis": "cap cumulative refunds",
-         "policy_checks": {"refund_session_cap": {"enabled": True, "cap_usd": 50.0}}},
+         "policy_checks": {"refund_session_cap": {"enabled": True, "cap_usd": 120.0}}},
         BASE_POLICY, BASE_PROMPT)
-    assert patch.policy_doc["checks"]["refund_session_cap"]["cap_usd"] == 50.0
+    assert patch.policy_doc["checks"]["refund_session_cap"]["cap_usd"] == 120.0
+
+
+def test_rejects_tightening_below_what_the_oracle_authorises():
+    """The fault that put the live per-call limit at 20.00 against a 50.00 scope.
+
+    Each step down was a valid tightening, so monotonic hardening allowed all of
+    them, and every legitimate refund between 20 and 50 was refused. Blocking an
+    authorised call cannot prevent a breach, so the tightening bought nothing.
+    """
+    with pytest.raises(PatchRejected, match="the oracle already authorises"):
+        build_patch(
+            {"diagnosis": "refunds keep getting abused, clamp them",
+             "policy_checks": {"refund_per_call_limit": {"enabled": True, "limit_usd": 20.0}}},
+            BASE_POLICY, BASE_PROMPT)
 
 
 def test_coherence_holds_for_the_shipped_defaults():
