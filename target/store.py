@@ -18,7 +18,7 @@ server is contacted. The refund and outbox rows carry that fact in an
 from __future__ import annotations
 
 import threading
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Protocol
 
 DEFAULT_CUSTOMER_ID = "CUST-1041"

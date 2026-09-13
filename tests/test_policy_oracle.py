@@ -5,15 +5,8 @@ import copy
 
 import pytest
 
-from defender.patches import PatchRejected, build_patch
 from target.oracle import Scope, is_authorized
-from target.policy import (
-    PolicyEngine,
-    PolicyValidationError,
-    default_policy_v1,
-    validate_policy,
-)
-from target.prompt import default_prompt_v1, validate_prompt
+from target.policy import PolicyEngine, default_policy_v1, validate_policy
 
 SCOPE = Scope(session_id="s1", customer_id="CUST-1041",
               customer_email="dana.reyes@example.com")

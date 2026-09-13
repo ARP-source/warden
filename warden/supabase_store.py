@@ -19,7 +19,7 @@ from typing import Any, Sequence
 from warden.config import Config, get_config, resolved_mode
 from warden.ledger import GENESIS_HASH, LedgerEntry, canonical_json, utc_now_iso
 from warden.supabase_client import SupabaseClient
-from warden.versioning import KIND_POLICY, KIND_PROMPT, Version, content_hash
+from warden.versioning import KIND_PROMPT, Version, content_hash
 
 LEDGER_TABLE = "warden_ledger"
 

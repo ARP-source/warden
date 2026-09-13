@@ -1,8 +1,6 @@
 """The regression suite and the pieces that keep the loop honest."""
 from __future__ import annotations
 
-import copy
-
 import pytest
 
 from evals.benign_suite import BENIGN_CASES, suite_fingerprint
