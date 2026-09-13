@@ -138,27 +138,47 @@ def _builders(alt, mo, pd):
     def build_curves(series, benign):
         if not series:
             return mo.md("_No rounds yet. Start the loop: `python run_loop.py`._")
+        # Round ids are chronological but not contiguous: benchmark_models.py
+        # stamps its benign suite at round*1000+900 and the orchestrator then
+        # resumes from that maximum, so later rounds carry ~900,000,000 ids.
+        # Plotting the raw id crushes the whole series against the origin, and a
+        # few attacks per round quantises each rate to 0/20/40. Plot position and
+        # average the attack curves; keep the real id in the tooltip.
+        import bisect
+
+        rids = [int(r["round_id"]) for r in series]
+        win = 10
+        intents = [100 * r["intent_rate"] for r in series]
+        execs = [100 * r["enforcement_rate"] for r in series]
+
+        def roll(vals, i):
+            seg = vals[max(0, i - win + 1):i + 1]
+            return sum(seg) / len(seg)
+
         rows = []
-        for r in series:
-            rows.append({"round": r["round_id"], "rate": 100 * r["intent_rate"],
+        for n, r in enumerate(series, start=1):
+            rows.append({"n": n, "round": rids[n - 1], "rate": roll(intents, n - 1),
                          "measure": "Attack success (proposed out of scope)"})
-            rows.append({"round": r["round_id"], "rate": 100 * r["enforcement_rate"],
+            rows.append({"n": n, "round": rids[n - 1], "rate": roll(execs, n - 1),
                          "measure": "Executed out of scope"})
         for b in benign:
             if b.get("round_id") is not None:
-                rows.append({"round": b["round_id"], "rate": 100 * b["score"],
-                             "measure": "Benign suite score"})
+                pos = bisect.bisect_right(rids, int(b["round_id"]))
+                if pos:
+                    rows.append({"n": pos, "round": int(b["round_id"]),
+                                 "rate": 100 * b["score"],
+                                 "measure": "Benign suite score"})
         scale = alt.Scale(
             domain=["Attack success (proposed out of scope)", "Executed out of scope",
                     "Benign suite score"],
             range=["#d1495b", "#8b2635", "#2a9d8f"])
         return mo.ui.altair_chart(
             alt.Chart(pd.DataFrame(rows)).mark_line(point=True, strokeWidth=3).encode(
-                x=alt.X("round:Q", title="Round"),
+                x=alt.X("n:Q", title="Hardening round (in order)"),
                 y=alt.Y("rate:Q", title="Percent", scale=alt.Scale(domain=[0, 100])),
                 color=alt.Color("measure:N", scale=scale, title=None,
                                 legend=alt.Legend(orient="top", labelFontSize=13)),
-                tooltip=["round", "measure", alt.Tooltip("rate:Q", format=".1f")],
+                tooltip=["n", "round", "measure", alt.Tooltip("rate:Q", format=".1f")],
             ).properties(
                 height=340,
                 title="The two curves: attack success falling while benign stays flat")
