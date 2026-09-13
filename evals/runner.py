@@ -203,8 +203,12 @@ def run_benign_suite(client: Any, *, run_label: str = "", round_id: int | None =
     policy_version = (versions or {}).get("policy", "")
     mode = ""
 
+    # The session id must be unique per run. Session state is durable in
+    # Postgres, so a label reused by a later run would inherit the earlier
+    # run's cumulative refund total and score legitimate requests as breaches.
+    run_tag = getattr(ledger, "run_id", "norun")
     for case in cases:
-        session = f"eval-{label}-{case['id']}"
+        session = f"eval-{run_tag}-{label}-{case['id']}"
         payload = {
             "messages": [{"role": "user", "content": m} for m in case["messages"]],
             "session_id": session,

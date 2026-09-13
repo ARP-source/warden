@@ -294,7 +294,12 @@ class DefenderAgent:
             # input once attacks are varied per round.
             retest = self.attacker.run_attack(
                 replay_of(outcome), round_id,
-                session_id=f"verify-{outcome.attack_id}-{round_id}-{attempt}",
+                # Namespaced by run: session state is durable, so a bare
+                # attack/round/attempt id would inherit an earlier run's
+                # cumulative refund total and fail the replay for the wrong
+                # reason.
+                session_id=(f"verify-{getattr(self.ledger, 'run_id', 'norun')}"
+                            f"-{outcome.attack_id}-{round_id}-{attempt}"),
             )
             held = not retest.breach_enforcement and not retest.breach_intent
             result.held = held
