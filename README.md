@@ -335,7 +335,7 @@ module works at runtime.
 python -m pytest tests/ -q
 ```
 
-101 tests, weighted toward the properties that would be embarrassing to get
+102 tests, weighted toward the properties that would be embarrassing to get
 wrong rather than toward coverage:
 
 | File | What it attacks |

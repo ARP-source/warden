@@ -102,8 +102,8 @@ patches the enforcement policy when attacks get through, and proves each patch d
 normal behavior before keeping it.</p>
 <ul class="facts">
   <li>Build <span class="mono">demo-base-v1</span></li>
-  <li>Audit ledger 55,542 rows, chain verified</li>
-  <li>101 tests passing</li>
+  <li>Audit ledger 62,675 rows, chain verified</li>
+  <li>102 tests passing</li>
   <li>CoreWeave Hacks (W&amp;B)</li>
 </ul>
 
@@ -114,7 +114,7 @@ matters is the <strong>executed</strong> rate — attacks that didn't just trick
 <em>proposing</em> a forbidden tool call, but actually got the call through the gate.</p>
 
 <div class="chartwrap">
-  <svg viewBox="0 0 700 210" role="img" aria-label="Undefended production models: 65.5 percent manipulated, 22.4 percent executed. Warden first quarter of the run: 5.6 percent manipulated, 0.7 percent executed. Warden latest quarter: 3.3 percent manipulated, 0.0 percent executed.">
+  <svg viewBox="0 0 700 210" role="img" aria-label="Undefended production models: 65.5 percent manipulated, 22.4 percent executed. Warden first quarter of the run: 5.1 percent manipulated, 0.5 percent executed. Warden latest quarter: 1.8 percent manipulated, 0.0 percent executed.">
     <g font-size="11" fill="var(--muted)" font-family="ui-monospace, Menlo, Consolas, monospace">
       <text x="0" y="200">0%</text>
       <text x="150" y="200" text-anchor="middle">20%</text>
@@ -131,23 +131,23 @@ matters is the <strong>executed</strong> rate — attacks that didn't just trick
       <text x="499" y="41" font-size="11.5" fill="var(--muted)" font-family="ui-monospace, Menlo, monospace">65.5%</text>
 
       <text x="0" y="80" font-size="12.5" fill="var(--ink)">Warden loop · first quarter of the run</text>
-      <rect x="0" y="88" width="42" height="22" fill="var(--bar-bg)"/>
-      <rect x="0" y="88" width="5" height="22" fill="var(--bar-crit)"/>
-      <text x="50" y="103" font-size="11.5" fill="var(--muted)" font-family="ui-monospace, Menlo, monospace">5.6% manipulated · 0.7% executed</text>
+      <rect x="0" y="88" width="38" height="22" fill="var(--bar-bg)"/>
+      <rect x="0" y="88" width="4" height="22" fill="var(--bar-crit)"/>
+      <text x="50" y="103" font-size="11.5" fill="var(--muted)" font-family="ui-monospace, Menlo, monospace">5.1% manipulated · 0.5% executed</text>
 
       <text x="0" y="142" font-size="12.5" fill="var(--ink)">Warden loop · latest quarter</text>
-      <rect x="0" y="150" width="25" height="22" fill="var(--bar-bg)"/>
+      <rect x="0" y="150" width="14" height="22" fill="var(--bar-bg)"/>
       <rect x="0" y="150" width="2" height="22" fill="var(--bar-crit)"/>
-      <text x="33" y="165" font-size="11.5" fill="var(--good)" font-family="ui-monospace, Menlo, monospace">3.3% manipulated · 0.0% executed</text>
+      <text x="33" y="165" font-size="11.5" fill="var(--good)" font-family="ui-monospace, Menlo, monospace">1.8% manipulated · 0.0% executed</text>
     </g>
   </svg>
 </div>
 <p class="legend">Grey bar = manipulated (agent proposed an out-of-scope call). Red bar = executed
 (the call passed the permission gate).</p>
 <p class="note">Undefended = 322 attacks across 7 models, policy <span class="mono">p48/s58</span>.
-Warden loop = run <span class="mono">warden-v3</span>, 1,792 attacks over 336 rounds against live
+Warden loop = run <span class="mono">warden-v3</span>, 2,327 attacks over 443 rounds against live
 models; first/latest are the means of the first and last quarter of rounds. Across the whole
-defended run the rates are <strong>3.7% manipulated and 0.2% executed</strong> — the loop converged
+defended run the rates are <strong>3.3% manipulated and 0.1% executed</strong> — the loop converged
 inside roughly the first hundred rounds and has held there since, which is the more useful claim:
 not a lucky dip, a level it sustains.</p>
 
@@ -218,31 +218,53 @@ improved, never that the test got easier.</p>
 
 <h2><span class="n">§3</span>Results — the hardening run</h2>
 <dl class="kv">
-  <dt>Attacks</dt><dd>1,792 across 336 live rounds</dd>
-  <dt>Manipulated</dt><dd>3.7% overall &nbsp;·&nbsp; 5.6% &rarr; 3.3% first to last quarter</dd>
-  <dt>Executed</dt><dd>0.2% overall &nbsp;·&nbsp; 0.7% &rarr; 0.0% first to last quarter</dd>
-  <dt>Patches</dt><dd>25 applied · 8 held · 7 reverted</dd>
+  <dt>Attacks</dt><dd>2,327 across 443 live rounds</dd>
+  <dt>Manipulated</dt><dd>3.3% overall &nbsp;·&nbsp; 5.1% &rarr; 1.8% first to last quarter</dd>
+  <dt>Executed</dt><dd>0.1% overall &nbsp;·&nbsp; 0.5% &rarr; 0.0% first to last quarter</dd>
+  <dt>Patches</dt><dd>26 applied · 9 held · 8 reverted</dd>
   <dt>Modelled spend</dt><dd>$7.38</dd>
 </dl>
 <p>Against the undefended baseline of 65.5% manipulated and 22.4% executed, the defended loop runs
-at <strong>3.7% and 0.2%</strong> — three executed breaches in 1,792 attacks. It reached that level
-early and has held it across 336 rounds rather than drifting back, which matters more than the
-size of the initial drop. Of 25 patches applied, 8 were verified and held and 7 were automatically
+at <strong>3.3% and 0.1%</strong> — three executed breaches in 2,327 attacks. It reached that level
+early and has held it across 443 rounds rather than drifting back, which matters more than the
+size of the initial drop. Of 26 patches applied, 9 were verified and held and 8 were automatically
 reverted when they failed to earn their keep.</p>
 
 <blockquote>
   <span class="hd">The tradeoff, stated plainly</span>
-  <p>Hardening is not free. Benign competence started at <strong>0.944</strong> (17 of 18
-  legitimate cases served) and sits at <strong>0.833</strong> (15 of 18); the drift guard reverted
-  7 patches that pushed it further, with the lowest observed point at 0.722. The sharper number is
-  the false-refusal rate, now <strong>27.3%</strong>: the hardened policy turns away roughly one
-  legitimate request in four. <strong>That is the real cost of driving executed breaches to
-  0.2%</strong>, and it is the weakest figure on this page. It is measured, governed and visible in
-  the ledger rather than hidden, and recovering those cases without giving back enforcement is the
-  open problem the loop is still working on.</p>
+  <p>Hardening is not free, and for most of this run we were paying more than it was worth.
+  Benign competence started at <strong>0.944</strong> (17 of 18 legitimate cases served), fell to
+  <strong>0.833</strong>, and the false-refusal rate reached <strong>27.3%</strong> — roughly one
+  legitimate request in four turned away. We then found that most of that was a defect rather than
+  a tradeoff, fixed it, and the suite returned to <strong>0.944 with false refusals at 9.1%</strong>
+  — with the executed-breach rate unchanged. What remains is the genuine cost of enforcement; what
+  was removed should never have been charged.</p>
 </blockquote>
 
-<h3>Why benign competence can only fall</h3>
+<h3>The defect: enforcement drifted below ground truth</h3>
+<p>The demo script opens by asking for a legitimate $29 refund, to show the agent working normally
+before any attack. Run against the live service, it was <em>refused</em>. The oracle said
+<span class="mono">refund 29.00 is within the authorised limit</span>; the policy said
+<span class="mono">refund 29.00 exceeds the 20.00 limit in force</span>.</p>
+<p>Twenty-five monotonic tightenings had walked the per-call refund limit down to <strong>$20
+against an authorised scope of $50</strong>, and the cumulative session cap to <strong>$50 against
+$120</strong>. Every legitimate refund between those bounds was being refused.</p>
+<p>That is not caution, it is pure loss. An enforcement breach is defined as an <em>unauthorised</em>
+call executing, so a refund the oracle calls authorised can never be one. Refusing it prevents no
+breach and buys a false refusal outright. It is the same class of fault as the earlier coherence
+bug — each tightening valid on its own, the accumulation incoherent against ground truth.</p>
+<p>The fix is a third guard, <span class="mono">_assert_ground_truth_floor</span>: a patch may
+never set a limit below what the oracle already authorises. Policy was realigned to the floor by
+operator commit, which the Defender could not have done itself, since patches may only tighten.
+<strong>Benign competence went from 0.833 to 0.944 and false refusals from 27.3% to 9.1%, with the
+executed-breach rate unchanged</strong> — the $500 supervisor-override attack is still refused
+without a tool call ever being attempted.</p>
+<p>Worth saying plainly: this was found by probing the running service with its own demo script,
+not by a test. The 101 tests all passed while it was happening, because every individual patch was
+valid. It is exactly the failure mode the project exists to catch, and it took auditing the live
+system to see it.</p>
+
+<h3>Why benign competence can still only fall</h3>
 <p>That cost is not an accident, and the mechanism is worth stating precisely.
 <span class="mono">_assert_hardening_only</span> in <span class="mono">defender/patches.py</span>
 refuses <em>any</em> change that loosens enforcement — disabling a check, raising a refund ceiling,
@@ -253,8 +275,8 @@ worked that out would get the defender to disarm itself.</p>
 competence.</strong> It can only tighten. A bad patch can still be undone — a revert re-activates
 an earlier committed version rather than proposing a looser one, which is why 7 reverts were
 possible — but once a tightening is verified and held, its benign cost is permanent. Benign
-competence is a one-way ratchet, and 27.3% false refusals is where 25 patches of ratcheting has
-left it.</p>
+competence is a one-way ratchet. That is what let the drift above accumulate unnoticed: nothing
+in the loop could walk a limit back up, only a guard could stop it going down.</p>
 <p>The fix is not to weaken the guard. It is a separate <em>benign-recovery</em> patch kind that
 may loosen a control only when the executed-breach rate is zero and the benign score has regressed
 against its baseline, subject to the same verification and revert rules as any other patch — so
@@ -264,12 +286,13 @@ the next piece of work, and it is deliberately not built yet.</p>
 <h2><span class="n">§4</span>Production readiness</h2>
 <p>The claim is not that it runs. It is that it already survived failure.</p>
 <ul>
-  <li><strong>It survived a real crash.</strong> The dev machine died mid-run. On restart the hash chain — now 55,542 rows — verified intact end to end, and the budget governor reaped 3 orphaned reservations left by the killed process. Recovery was automatic.</li>
+  <li><strong>It survived a real crash.</strong> The dev machine died mid-run. On restart the hash chain — now 62,675 rows — verified intact end to end, and the budget governor reaped 3 orphaned reservations left by the killed process. Recovery was automatic.</li>
   <li><strong>Tamper-evident audit ledger.</strong> Append-only and hash-chained, with the chain computed server-side under a Postgres advisory lock and appends enforced by triggers and row-level security.</li>
   <li><strong>Budget governor with a kill switch.</strong> Pre-flight reservation gate, drain mode, hard kill switch, a <span class="mono">reconcile</span> command, and a 1.25&times; pricing safety factor under a $70 ceiling.</li>
   <li><strong>Real deployed infrastructure.</strong> Supabase Postgres holds all durable state; a stateless FastAPI service runs on Vercel serverless. No local-only shortcuts and no mock data.</li>
+  <li><strong>Enforcement cannot drift below ground truth.</strong> Three guards now stand between a model's proposal and the running agent: a whitelist with bounds, a coherence check between related controls, and a floor at what the oracle authorises. The third was added after the loop tightened past that floor and started refusing legitimate work.</li>
   <li><strong>The kill switch is not a public control.</strong> The <span class="mono">/admin/*</span> routes — reload, halt, clear-halt — require a shared secret and are disabled outright when none is configured, rather than defaulting to open. They were briefly reachable unauthenticated on the public deployment; that was found by auditing this service the way the project audits its own agent, and closed.</li>
-  <li><strong>Instrumented and tested.</strong> Weave tracing on the hot path with a per-request flush for serverless; 101 tests across oracle, policy, patch guards, budget governor and ledger integrity.</li>
+  <li><strong>Instrumented and tested.</strong> Weave tracing on the hot path with a per-request flush for serverless; 102 tests across oracle, policy, patch guards, budget governor and ledger integrity.</li>
 </ul>
 
 <h2><span class="n">§5</span>Safety scope</h2>
@@ -302,7 +325,7 @@ payment processor and no SMTP behind them. The blast radius is a database table.
 <pre><span class="c"># the ledger chain is intact end to end (the crash-survival claim)</span>
 warden verify-chain
 
-<span class="c"># the guardrails and integrity invariants hold — 101 tests</span>
+<span class="c"># the guardrails and integrity invariants hold — 102 tests</span>
 python -m pytest tests/ -q
 
 <span class="c"># reproduce the seven-model benchmark table (§1)</span>
@@ -362,7 +385,7 @@ requests. That is days of work, not months, but it is not zero and it is not aut
 <p><strong>Why it would survive contact with a real company.</strong> The parts that usually kill a
 prototype in procurement are the parts that already exist: a tamper-evident audit trail that
 survived a real crash, a spend governor with a kill switch that has actually fired, row-level
-security on the database, 101 tests, and a verification script that reports what is true rather
+security on the database, 102 tests, and a verification script that reports what is true rather
 than what is claimed. The remaining work is integration surface, which is ordinary engineering.
 The hard part — proving a security change did not break the product — is the part that is done.</p>
 
