@@ -247,6 +247,24 @@ Set `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `WARDEN_OPENAI_BASE_URL` and
 `WANDB_API_KEY` in the Vercel project environment. Never ship the service role
 key to a browser.
 
+## Evidence and documentation
+
+| Command or file | What it gives you |
+| --- | --- |
+| `python verify_deliverables.py` | Checks each deliverable against the ledger and prints PASS, PARTIAL or MISSING with the evidence. Nothing marked MISSING should be claimed. |
+| `reports/posture-latest.md` | The generated security posture report for the most recent run. |
+| `docs/DEMO.md` | Live demo script and a walkthrough of how to read the posture report. |
+| `docs/CLIP.md` | Shot list for the 45-second clip. |
+| `warden status` | Run summary as JSON. |
+| `warden verify` | Recomputes the audit hash chain. |
+
+The shortest description of what an attacker achieved is one query:
+
+```sql
+select ts, customer_id, amount_usd, oracle_code, policy_rule_id
+from warden_refunds where authorized = false order by ts desc;
+```
+
 ## Safety scope
 
 Everything here targets the toy agent built in this repository and nothing else.
