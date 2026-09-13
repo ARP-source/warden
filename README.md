@@ -6,7 +6,9 @@
 - Live dashboard (molab, hosted): https://molab.marimo.io/notebooks/nb_y8TEU4noYmk5XK3NnTWC8K/app
   (molab does not start a kernel on its own - click **Run it now** and allow ~30s for a cold start)
 - Weave traces: project `warden-permission-immune-system`
-- Evaluation dossier (results, evidence, safety scope): [`docs/warden-dossier.html`](docs/warden-dossier.html)
+- Evaluation dossier (results, evidence, safety scope): https://warden-beryl.vercel.app/dossier
+  (the same page is committed at `docs/warden-dossier.html`, but GitHub shows HTML as
+  source rather than rendering it, so read it at the link above)
 
 An autonomous loop that continuously red-teams an AI agent's **tool-calling
 permission boundaries**, auto-patches the weaknesses it finds, and proves the
@@ -291,7 +293,7 @@ service is deployed to a public URL.
 Run the Target in your own infrastructure with the included `Dockerfile`; it keeps no
 durable state, so it is safe to kill and reschedule at any point.
 
-See [`docs/warden-dossier.html`](docs/warden-dossier.html) §8 for the full argument.
+See §8 of the [evaluation dossier](https://warden-beryl.vercel.app/dossier) for the full argument.
 
 ## Deployment
 
