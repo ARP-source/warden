@@ -243,9 +243,29 @@ serving a Target whose state evaporates between requests.
 vercel deploy --prod        # needs `vercel login`, or --token=$VERCEL_TOKEN
 ```
 
-Set `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `WARDEN_OPENAI_BASE_URL` and
-`WANDB_API_KEY` in the Vercel project environment. Never ship the service role
-key to a browser.
+Set these in the Vercel project environment before deploying:
+
+| Variable | Value |
+| --- | --- |
+| `SUPABASE_URL` | `https://<ref>.supabase.co` |
+| `SUPABASE_SERVICE_ROLE_KEY` | the **secret** key, not the publishable one |
+| `WARDEN_OPENAI_BASE_URL` | `https://api.inference.wandb.ai/v1` |
+| `WANDB_API_KEY` | doubles as the inference key and the Weave key |
+| `WARDEN_STORE` | `supabase` (the entrypoint sets this anyway) |
+
+Leave `ANTHROPIC_API_KEY` unset unless you are paying for that provider: it is
+preferred over the OpenAI-compatible endpoint when present, and the `anthropic`
+package is deliberately not in `requirements.txt`, so setting it would degrade
+the deployment to the simulated doubles. `/healthz` reports the resolved mode,
+so that degradation is visible rather than silent.
+
+Never ship the service role key to a browser. `.env` is gitignored and
+`.vercelignore`d.
+
+The entrypoint is declared in `pyproject.toml` as `api.index:app`. That module
+assigns `app` at top level because Vercel finds the entrypoint by static
+analysis, and defining it only inside a branch fails the build even though the
+module works at runtime.
 
 ## Tests
 

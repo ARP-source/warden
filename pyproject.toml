@@ -29,3 +29,9 @@ packages = ["warden", "target", "attacker", "defender", "analysis", "evals", "or
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.vercel]
+# Named explicitly so the build does not have to choose between this and the
+# FastAPI instance in target/app.py. api.index wraps that one and refuses to
+# serve when required configuration is absent.
+entrypoint = "api.index:app"
