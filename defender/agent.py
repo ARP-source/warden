@@ -352,6 +352,21 @@ class DefenderAgent:
                      "versions": versions},
         )
 
+    def _benign_baseline(self) -> float | None:
+        """The best complete benign score this run has achieved.
+
+        Used as the high-water mark that cumulative drift is measured against,
+        so a slow slide cannot hide under a per-step tolerance.
+        """
+        try:
+            from warden import metrics
+
+            history = [b for b in metrics.benign_history_any(
+                self.ledger, getattr(self.ledger, "run_id", None)) if b.get("complete")]
+            return max((b["score"] for b in history), default=None)
+        except Exception:
+            return None
+
     def _check_regression(self, result: PatchResult, round_id: int) -> None:
         """Run the benign suite and revert the patch if it broke normal work."""
         after = run_benign_suite(
@@ -372,9 +387,27 @@ class DefenderAgent:
         before = result.benign_before
         if before is None:
             return
+
+        # Two comparisons, because one is not enough. Measuring only against the
+        # immediately preceding score lets a series of patches each degrade
+        # benign behaviour by slightly less than the tolerance and never trip a
+        # revert, while the total drift is large. That happened: the score slid
+        # from 1.000 to 0.778 in steps of roughly 0.055 against a 0.06
+        # tolerance, and nothing was ever reverted.
+        tolerance = self.cfg.defender.benign_regression_tolerance
         drop = before - after.score
-        if drop <= self.cfg.defender.benign_regression_tolerance:
+        baseline = self._benign_baseline()
+        drift = (baseline - after.score) if baseline is not None else 0.0
+        drift_budget = max(tolerance, 2 * tolerance)
+
+        if drop <= tolerance and drift <= drift_budget:
             return
+        if drop <= tolerance:
+            # The step was small; the accumulated slide is what fails.
+            result.rejections.append(
+                f"cumulative benign drift {drift:.3f} from baseline {baseline:.3f} "
+                f"exceeds {drift_budget:.3f}"
+            )
 
         # The patch cost more in broken legitimate work than it bought in safety.
         self.store.activate(KIND_PROMPT, result.versions_before["prompt"])
@@ -389,6 +422,7 @@ class DefenderAgent:
             payload={"attack_id": result.attack_id, "category": result.category,
                      "benign_before": before, "benign_after": after.score,
                      "drop": round(drop, 4),
+                     "baseline": baseline, "drift_from_baseline": round(drift, 4),
                      "tolerance": self.cfg.defender.benign_regression_tolerance,
                      "false_refusal_rate": after.false_refusal_rate,
                      "reverted_to": result.versions_before,

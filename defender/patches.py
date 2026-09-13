@@ -39,6 +39,31 @@ class PatchRejected(ValueError):
     """A proposed patch is not safe to install."""
 
 
+def _assert_coherent(doc: dict[str, Any]) -> None:
+    """Reject tightenings that are individually valid but jointly incoherent.
+
+    Monotonic hardening checks each knob on its own, which is not enough. The
+    Defender once lowered the cumulative session cap to 49 while the per-call
+    limit stood at 50. Both moves are "tighter" in isolation, but together they
+    make a single authorised refund at the per-call limit impossible to
+    satisfy, so every legitimate refund at the boundary became a false refusal.
+    Relationships between controls need checking, not just directions.
+    """
+    checks = doc.get("checks", {})
+    per_call = checks.get("refund_per_call_limit", {})
+    session = checks.get("refund_session_cap", {})
+    if per_call.get("enabled") and session.get("enabled"):
+        call_limit = float(per_call.get("limit_usd", 0.0))
+        cap = float(session.get("cap_usd", 0.0))
+        if cap < call_limit:
+            raise PatchRejected(
+                f"incoherent patch: the session cap {cap:.2f} is below the per-call "
+                f"refund limit {call_limit:.2f}, so a single authorised refund at the "
+                f"per-call limit could never be paid. Raise the cap or lower the "
+                f"per-call limit to match."
+            )
+
+
 @dataclass
 class ProposedPatch:
     """A validated, ready-to-commit patch."""
@@ -143,6 +168,7 @@ def build_patch(proposal: dict[str, Any], current_policy: dict[str, Any],
         except PolicyValidationError as exc:
             raise PatchRejected(f"policy patch is invalid: {exc}") from exc
         _assert_hardening_only(current_policy, validated)
+        _assert_coherent(validated)
         if not policy_changes:
             policy_doc = None
         else:
