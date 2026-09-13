@@ -224,6 +224,90 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     return 0 if not degraded else 1
 
 
+def cmd_reconcile(args: argparse.Namespace) -> int:
+    """Compare the ledger's cost estimate against what the provider billed.
+
+    The governor enforces its ceiling against an estimated price table, not
+    against an invoice. If the table is wrong the ceiling is wrong, and it can
+    be overshot without anything in the system noticing. This prints the
+    tokens actually consumed and, given the real billed figure, the rate that
+    implies, so the table can be corrected.
+    """
+    from collections import Counter
+
+    from warden.config import get_config
+    from warden.ledger import get_ledger
+
+    cfg = get_config()
+    ledger = get_ledger(cfg)
+
+    rows = []
+    if getattr(ledger, "backend", "sqlite") == "supabase":
+        page = 0
+        while page <= 40:
+            chunk = ledger.client.select(
+                "warden_ledger", filters={"action": "eq.model_call"},
+                order="seq.asc", limit=1000, offset=page * 1000)
+            if not chunk:
+                break
+            rows += chunk
+            page += 1
+    else:
+        rows = [{"payload": e.payload, "cost_usd": e.cost_usd}
+                for e in ledger.recent(limit=100000, action="model_call")]
+
+    tin, tout, est, calls = Counter(), Counter(), Counter(), Counter()
+    for r in rows:
+        p = r.get("payload") or {}
+        m = p.get("model", "unknown")
+        tin[m] += int(p.get("input_tokens") or 0)
+        tout[m] += int(p.get("output_tokens") or 0)
+        est[m] += float(r.get("cost_usd") or 0)
+        calls[m] += 1
+
+    print("Ledger token accounting")
+    print("=" * 78)
+    print(f"  {'model':44s} {'calls':>6s} {'Mtok in':>8s} {'Mtok out':>9s} {'est':>8s}")
+    ti = to = te = 0
+    for m in sorted(calls, key=lambda x: -est[x]):
+        print(f"  {m[:44]:44s} {calls[m]:6d} {tin[m]/1e6:8.3f} {tout[m]/1e6:9.3f} "
+              f"${est[m]:7.4f}")
+        ti += tin[m]; to += tout[m]; te += est[m]
+    print(f"  {'TOTAL':44s} {sum(calls.values()):6d} {ti/1e6:8.3f} {to/1e6:9.3f} "
+          f"${te:7.4f}")
+    # Historical rows carry whatever the price table said when they were
+    # written, so the estimate above is not a verdict on the current table.
+    at_current = sum(cfg.price_for(m).cost(tin[m], tout[m]) for m in calls)
+    print()
+    print(f"  estimate as recorded   : ${te:.4f}  (prices in force at the time)")
+    print(f"  same tokens, current   : ${at_current:.4f}  (current table, "
+          f"{cfg.budget.pricing_safety_factor:.2f}x safety factor)")
+    print(f"  ceiling                : ${cfg.budget.ceiling_usd:.2f}")
+
+    if args.billed is not None and (ti + to):
+        billed = float(args.billed)
+        blended = billed / ((ti + to) / 1e6)
+        ratio = billed / te if te else float("inf")
+        ratio_now = billed / at_current if at_current else float("inf")
+        print()
+        print(f"  provider billed        : ${billed:.4f}")
+        print(f"  implied blended rate   : ${blended:.3f} per Mtok")
+        print(f"  estimate is off by     : {ratio:.2f}x "
+              + ("(UNDER-counting; the ceiling can be overshot)" if ratio > 1.05
+                 else "(over-counting; safe direction)" if ratio < 0.95 else "(close)"))
+        print(f"  current table would be : {ratio_now:.2f}x "
+              + ("(still UNDER-counting; raise prices)" if ratio_now > 1.05
+                 else "(over-counting; safe)" if ratio_now < 0.95 else "(accurate)"))
+        if ratio_now > 1.05:
+            print("  action: raise the prices in config/warden.toml, or raise "
+                  "pricing_safety_factor")
+    else:
+        print()
+        print("  pass --billed <usd> with the provider's figure to compute the "
+              "implied rate")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="warden", description="Warden operator commands")
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -241,6 +325,12 @@ def main(argv: list[str] | None = None) -> int:
 
     p_doctor = sub.add_parser("doctor", help="check credentials, backends and reachability")
     p_doctor.set_defaults(func=cmd_doctor)
+
+    p_recon = sub.add_parser(
+        "reconcile", help="compare the ledger cost estimate against real billing")
+    p_recon.add_argument("--billed", type=float, default=None,
+                         help="the amount the provider actually billed, in USD")
+    p_recon.set_defaults(func=cmd_reconcile)
 
     p_halt = sub.add_parser("halt", help="trip or clear the kill switch")
     p_halt.add_argument("--reason", default="manual halt from cli")

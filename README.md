@@ -212,6 +212,21 @@ the run enters **drain mode**: new attacks stop, while the Defender, the eval
 suite and the analysis pass are still admitted so the run ends with a consistent
 final report rather than mid-sentence.
 
+**A limit on what the ceiling can promise.** The governor enforces its ceiling
+against an estimated price table, not against the provider's invoice. If the
+table is wrong the ceiling is wrong, and it can be overshot with nothing in the
+system noticing. That happened here: the first live runs were priced at roughly
+a quarter of what W&B actually billed, so a $2.00 ceiling corresponded to about
+$6 of real spend. Prices are now calibrated against real billing and carry a
+1.25x safety factor, so the estimate over-counts by about a third. Check it with:
+
+```bash
+warden reconcile --billed <what the provider says>
+```
+
+It prints the tokens consumed, what they cost under the current table, and the
+ratio. Anything above 1.0 means the ceiling is not yet a real bound.
+
 **Audit ledger.** Append-only and hash-chained. On Postgres the chain is built
 inside a function holding an advisory lock, so concurrent writers cannot race
 the head, and `UPDATE`/`DELETE` are rejected by triggers. `warden verify`

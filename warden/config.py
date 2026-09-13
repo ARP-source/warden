@@ -64,6 +64,10 @@ class BudgetConfig:
     ceiling_usd: float
     reserve_floor_usd: float
     max_call_usd: float
+    # Prices are estimates, and the governor enforces against them rather than
+    # against the provider invoice. This multiplier buys margin against the
+    # table being wrong in the direction that matters.
+    pricing_safety_factor: float = 1.0
 
 
 @dataclass(frozen=True)
@@ -185,8 +189,13 @@ class Config:
         return p if p.is_absolute() else PROJECT_ROOT / p
 
     def price_for(self, model: str) -> ModelPrice:
+        factor = max(1.0, float(getattr(self.budget, "pricing_safety_factor", 1.0)))
         if model in self.pricing:
-            return self.pricing[model]
+            base = self.pricing[model]
+            if factor == 1.0:
+                return base
+            return ModelPrice(base.input_per_mtok * factor,
+                              base.output_per_mtok * factor)
         # Unknown model: price it pessimistically so the budget governor can
         # never under-count spend for something we did not anticipate.
         return ModelPrice(input_per_mtok=15.0, output_per_mtok=75.0)
@@ -257,6 +266,8 @@ def load_config(path: Path | str | None = None) -> Config:
             ),
             reserve_floor_usd=float(raw["budget"]["reserve_floor_usd"]),
             max_call_usd=float(raw["budget"]["max_call_usd"]),
+            pricing_safety_factor=float(
+                raw["budget"].get("pricing_safety_factor", 1.0)),
         ),
         limits=LimitsConfig(
             max_model_calls_per_round=int(raw["limits"]["max_model_calls_per_round"]),

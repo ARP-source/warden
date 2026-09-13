@@ -10,16 +10,20 @@ mode = "auto"
 seed = 20260912
 
 [budget]
+# Multiplier applied to every price before the ceiling is checked. Prices are
+# estimates; this buys margin against them being wrong in the dangerous
+# direction. 1.0 trusts the table exactly.
+pricing_safety_factor = 1.25
 # HARD ceiling on real-dollar spend for the entire project run. Enforced by
 # atomic pre-flight reservation before every model call -- not monitored after.
-# Sized to stay well inside the free inference credits this project runs on.
-# Raise it only if you are knowingly spending real money.
-ceiling_usd = 2.00
+# Sponsor-provided W&B inference credits: $100 total. This ceiling is the hard
+# stop for the whole project run, enforced before every model call.
+ceiling_usd = 70.00
 # Below this remaining balance, only Tier-A (cheap) callers are admitted;
 # Defender/Analysis are shed first. Graceful degradation, not a cliff.
-reserve_floor_usd = 0.35
+reserve_floor_usd = 5.00
 # Refuse any single call whose projected cost exceeds this.
-max_call_usd = 0.05
+max_call_usd = 0.35
 
 [limits]
 # Rate limits are independent of the dollar cap: both must pass.
@@ -87,13 +91,23 @@ judge = "meta-llama/Llama-3.1-8B-Instruct"
 # USD per million tokens, for pre-flight projection and actual accounting.
 # A model missing from this table is priced pessimistically rather than free,
 # so an unrecognised model can never quietly escape the ceiling.
+#
+# These are ESTIMATES. The governor enforces its ceiling against this table, not
+# against the provider's invoice, so a table that is too low means a ceiling
+# that can be overshot. That happened: the first live runs were priced at about
+# a quarter of what W&B actually billed, so a $2.00 ceiling corresponded to
+# roughly $6 of real spend. Reconcile with `warden reconcile` and correct these
+# numbers whenever the provider or the models change.
 "claude-haiku-4-5-20251001" = { input = 1.00, output = 5.00 }
 "claude-sonnet-5" = { input = 3.00, output = 15.00 }
 "claude-opus-5" = { input = 15.00, output = 75.00 }
-"meta-llama/Llama-3.3-70B-Instruct" = { input = 0.10, output = 0.35 }
-"meta-llama/Llama-3.1-8B-Instruct" = { input = 0.02, output = 0.05 }
-"deepseek-ai/DeepSeek-V3.1" = { input = 0.55, output = 1.65 }
-"Qwen/Qwen3-235B-A22B-Instruct-2507" = { input = 0.10, output = 0.10 }
+# Calibrated against real W&B billing: 11.8M in + 0.66M out billed $5.88, a
+# blended $0.47/Mtok. Rounded up rather than down, because the failure that
+# matters is under-counting.
+"meta-llama/Llama-3.3-70B-Instruct" = { input = 0.50, output = 0.80 }
+"meta-llama/Llama-3.1-8B-Instruct" = { input = 0.15, output = 0.25 }
+"deepseek-ai/DeepSeek-V3.1" = { input = 0.90, output = 1.80 }
+"Qwen/Qwen3-235B-A22B-Instruct-2507" = { input = 0.60, output = 0.90 }
 # Locally hosted models cost nothing to call, but still consume rate limit.
 "ollama" = { input = 0.0, output = 0.0 }
 
