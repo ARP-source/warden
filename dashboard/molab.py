@@ -56,7 +56,18 @@ def _imports():
             r.raise_for_status()
             return r.json()
 
-    return SUPABASE_ANON_KEY, SUPABASE_URL, alt, fetch, mo, pd, rpc
+    def safe(call, default):
+        """Run a read; degrade to a default rather than erroring the notebook.
+
+        A remote notebook has a slower, less reliable link than the loop's own
+        process, so one slow query should dim a panel, not take down the page.
+        """
+        try:
+            return call()
+        except Exception:
+            return default
+
+    return SUPABASE_ANON_KEY, SUPABASE_URL, alt, fetch, mo, pd, rpc, safe
 
 
 @app.cell
@@ -67,30 +78,30 @@ def _refresh(mo):
 
 
 @app.cell
-def _load(fetch, refresh, rpc):
+def _load(fetch, refresh, rpc, safe):
     refresh  # dependency: re-read on every tick
 
     # The newest run in the ledger. A reader has no run of its own, and
     # defaulting to anything else would filter every panel down to nothing.
-    _newest = fetch("warden_ledger", {"select": "run_id", "order": "seq.desc",
-                                      "limit": "1"})
+    _newest = safe(lambda: fetch("warden_ledger", {"select": "run_id",
+                   "order": "seq.desc", "limit": "1"}), [])
     run_id = _newest[0]["run_id"] if _newest else ""
     flt = {"run_id": f"eq.{run_id}"}
 
-    rounds = fetch("warden_v_attack_rounds", {**flt, "order": "round_id.asc"})
-    categories = fetch("warden_v_attack_categories", flt)
-    benign = fetch("warden_v_benign_history", {**flt, "order": "seq.asc"})
-    patches = fetch("warden_v_patch_history", {**flt, "order": "seq.asc"})
-    spend = fetch("warden_v_spend_by_role", flt)
-    breaches = fetch("warden_v_enforcement_breaches", {**flt, "limit": "12"})
-    recent = fetch("warden_ledger", {**flt, "order": "seq.desc", "limit": "25"})
-    chain = rpc("warden_ledger_verify")
+    rounds = safe(lambda: fetch("warden_v_attack_rounds", {**flt, "order": "round_id.asc"}), [])
+    categories = safe(lambda: fetch("warden_v_attack_categories", flt), [])
+    benign = safe(lambda: fetch("warden_v_benign_history", {**flt, "order": "seq.asc"}), [])
+    patches = safe(lambda: fetch("warden_v_patch_history", {**flt, "order": "seq.asc"}), [])
+    spend = safe(lambda: fetch("warden_v_spend_by_role", flt), [])
+    breaches = safe(lambda: fetch("warden_v_enforcement_breaches", {**flt, "limit": "12"}), [])
+    recent = safe(lambda: fetch("warden_ledger", {**flt, "order": "seq.desc", "limit": "25"}), [])
+    chain = safe(lambda: rpc("warden_ledger_verify"), [{"ok": None, "checked": 0}])
     chain = chain[0] if isinstance(chain, list) and chain else chain
 
-    refunds = fetch("warden_refunds", {"select": "amount_usd,authorized",
-                                       "limit": "5000"})
-    emails = fetch("warden_email_outbox", {"select": "to_address,authorized",
-                                           "limit": "5000"})
+    refunds = safe(lambda: fetch("warden_refunds",
+                   {"select": "amount_usd,authorized", "limit": "5000"}), [])
+    emails = safe(lambda: fetch("warden_email_outbox",
+                  {"select": "to_address,authorized", "limit": "5000"}), [])
     return (benign, breaches, categories, chain, emails, patches, recent,
             refunds, rounds, run_id, spend)
 
@@ -134,8 +145,12 @@ def _header(chain, mo, run_id, stats):
             f"<div style='font-size:0.76rem;opacity:.6'>{sub}</div></div>")
 
     b = stats["benign"]
-    chain_txt = (f"verified over {chain.get('checked', 0):,} entries"
-                 if chain.get("ok") else f"BROKEN at {chain.get('broken_at')}")
+    if chain.get("ok"):
+        chain_txt = f"verified over {chain.get('checked', 0):,} entries"
+    elif chain.get("ok") is None:
+        chain_txt = "verification pending"
+    else:
+        chain_txt = f"BROKEN at {chain.get('broken_at')}"
 
     header = mo.md(
         f"# Warden — Agent Permission Immune System\n\n"
