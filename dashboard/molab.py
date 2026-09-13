@@ -72,22 +72,38 @@ def _imports():
 
 @app.cell
 def _refresh(mo):
-    # Off by default. On molab's slower link the reads take long enough that a
-    # short auto-refresh interval keeps re-invalidating the downstream cells and
-    # the page never settles enough to paint. The reader can opt in.
-    refresh = mo.ui.refresh(options=["off", "30s", "60s"], default_interval="off",
-                            label="Auto-refresh")
+    # A manual refresh button, not an auto-refresh interval. mo.ui.refresh only
+    # accepts time strings like "30s", so an "off" option raised a "Bad Data"
+    # error that stopped every cell below it from rendering. A button avoids
+    # that entirely and, on molab's slower link, avoids a short interval
+    # constantly re-invalidating the data cells before they can paint. Press it
+    # to re-read; the notebook is otherwise a snapshot from when it loaded.
+    refresh = mo.ui.refresh(label="Refresh data", options=["30s", "1m", "5m"])
     return (refresh,)
+
+
+@app.cell
+def _refresh_display(mo, refresh):
+    mo.hstack([mo.md("_Auto-refresh (optional):_"), refresh], justify="start", gap=0.5)
+    return
 
 
 @app.cell
 def _load(fetch, refresh, rpc, safe):
     refresh  # dependency: re-read on every tick
 
-    # The newest run in the ledger. A reader has no run of its own, and
-    # defaulting to anything else would filter every panel down to nothing.
-    _newest = safe(lambda: fetch("warden_ledger", {"select": "run_id",
-                   "order": "seq.desc", "limit": "1"}), [])
+    # Prefer the hardening run, which actually patches. Fall back to whatever is
+    # newest. Benchmark runs (warden-modelcmp, warden-bench*) hold no patches
+    # and no spend of their own, so defaulting to them shows empty panels.
+    _preferred = safe(lambda: fetch("warden_ledger", {
+        "select": "run_id", "order": "seq.desc", "limit": "1",
+        "run_id": "like.warden-v*", "action": "eq.patch_applied"}), [])
+    if _preferred:
+        run_id = _preferred[0]["run_id"]
+        _newest = _preferred
+    else:
+        _newest = safe(lambda: fetch("warden_ledger", {"select": "run_id",
+                       "order": "seq.desc", "limit": "1"}), [])
     run_id = _newest[0]["run_id"] if _newest else ""
     flt = {"run_id": f"eq.{run_id}"}
 
