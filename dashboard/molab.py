@@ -89,6 +89,119 @@ def _refresh_display(mo, refresh):
 
 
 @app.cell
+def _problem(fetch, mo, safe):
+    # The case for the product, from real data. Reads the cross-model benchmark:
+    # every model, undefended, same fixed policy. All of this is measured, not
+    # asserted - the rows are in Postgres and the query is right here.
+    #
+    # The computation is wrapped in a function so its loop variables do not leak
+    # to cell scope; marimo treats a top-level `for r in ...` as an export, and
+    # bare names like `r` collide with other cells.
+    def _gather():
+        bench = safe(lambda: fetch("warden_v_attack_categories",
+                                   {"run_id": "eq.warden-modelcmp"}), [])
+        attempts = sum(int(row.get("attempts") or 0) for row in bench)
+        intent = sum(int(row.get("intent_breaches") or 0) for row in bench)
+        executed = sum(int(row.get("enforcement_breaches") or 0) for row in bench)
+        bad_ref = safe(lambda: fetch("warden_refunds",
+                       {"select": "amount_usd,authorized", "authorized": "eq.false",
+                        "limit": "5000"}), [])
+        bad_mail = safe(lambda: fetch("warden_email_outbox",
+                        {"select": "to_address,authorized", "authorized": "eq.false",
+                         "limit": "5000"}), [])
+        refund_usd = sum(abs(float(row.get("amount_usd") or 0)) for row in bad_ref)
+        exfil_addrs = len({e.get("to_address") for e in bad_mail})
+        return attempts, intent, executed, refund_usd, exfil_addrs
+
+    bench_attempts, bench_intent, bench_executed, refund_usd, exfil_addrs = _gather()
+
+    def big(value, label, tone="#d1495b"):
+        return mo.Html(
+            "<div style='flex:1;min-width:210px;padding:20px 22px;border-radius:12px;"
+            "background:rgba(209,73,91,0.08);border:1px solid rgba(209,73,91,0.30)'>"
+            f"<div style='font-size:2.6rem;font-weight:700;line-height:1;color:{tone}'>"
+            f"{value}</div>"
+            f"<div style='font-size:0.85rem;opacity:.75;margin-top:6px'>{label}</div>"
+            "</div>")
+
+    intent_pct = (100.0 * bench_intent / bench_attempts) if bench_attempts else 0.0
+    exec_pct = (100.0 * bench_executed / bench_attempts) if bench_attempts else 0.0
+
+    problem = mo.vstack([
+        mo.md(
+            "# The problem\n\n"
+            "Hand an AI agent real tools - refunds, email, account changes - and an "
+            "attacker will try to make it act outside what the user authorised. We "
+            "ran the same catalogue of documented prompt-injection attacks against "
+            "**seven production models**, each with tools and an ordinary support "
+            "policy, and measured how often the attacks worked.\n\n"
+            "**Every model was vulnerable. Not one escaped it.**"),
+        mo.hstack([
+            big(f"{intent_pct:.0f}%", "of attacks manipulated the agent into "
+                "proposing an out-of-scope tool call"),
+            big(f"{exec_pct:.0f}%", "actually executed - a refund paid, data sent, "
+                "an account changed", tone="#8b2635"),
+            big(f"{bench_attempts:,}", "attacks, across 7 models, undefended",
+                tone="#6b7280"),
+        ], gap=0.8, wrap=True),
+        mo.md(
+            f"In this toy support scenario alone, undefended agents paid "
+            f"**\\${refund_usd:,.0f}** in refunds nobody authorised and emailed "
+            f"customer records to **{exfil_addrs} attacker-controlled addresses**. "
+            "You cannot pick a safe model - the spread across all seven is narrow. "
+            "The fix has to be an enforcement layer around the agent, not a better "
+            "prompt.\n\n"
+            "The rest of this notebook is that enforcement layer, and an autonomous "
+            "loop that hardens it and proves it did not break normal work. Scroll on."),
+    ])
+    return (problem,)
+
+
+@app.cell
+def _problem_show(problem):
+    problem
+    return
+
+
+@app.cell
+def _problem_by_category(fetch, mo, safe):
+    # Which techniques actually work, ranked. The strongest are the
+    # research-grounded ones - payload splitting, multi-turn erosion - which do
+    # not look like attacks at all.
+    cat_rows = safe(lambda: fetch("warden_v_attack_categories",
+                               {"run_id": "eq.warden-modelcmp",
+                                "order": "enforcement_rate.desc"}), [])
+    def _build():
+        if not cat_rows:
+            return mo.md("")
+        lines = ["### Which attacks work best (undefended, all models)", "",
+                 "| Technique | Manipulated the agent | Executed out of scope |",
+                 "| --- | --- | --- |"]
+        for row in cat_rows:
+            cat = row.get("category") or "unknown"
+            lines.append(
+                "| `" + cat + "` | "
+                + f"{100*float(row.get('intent_rate') or 0):.0f}% | "
+                + f"**{100*float(row.get('enforcement_rate') or 0):.0f}%** |")
+        return mo.md("\n".join(lines))
+
+    cat_problem = _build()
+    return (cat_problem,)
+
+
+@app.cell
+def _problem_cat_show(cat_problem):
+    cat_problem
+    return
+
+
+@app.cell
+def _divider(mo):
+    mo.md("\n---\n\n# The solution\n")
+    return
+
+
+@app.cell
 def _load(fetch, refresh, rpc, safe):
     refresh  # dependency: re-read on every tick
 
