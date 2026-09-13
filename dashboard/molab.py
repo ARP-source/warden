@@ -321,13 +321,25 @@ def _charts(alt, benign, mo, pd, rounds, stats):
 
         rows = []
         rids = [int(r["round_id"]) for r in rounds]
+
+        # A round runs a handful of attacks, so its rate can only land on 0, 20,
+        # 40 ... - the raw series is a spike forest that hides the trend and
+        # shows 40% spikes next to a 3.8% headline. Average the attack curves
+        # over a trailing window. The benign suite runs 18 cases a time and is
+        # already smooth enough to read as-is.
+        win = 10
+        intents = [100 * float(r["intent_rate"] or 0) for r in rounds]
+        execs = [100 * float(r["enforcement_rate"] or 0) for r in rounds]
+
+        def roll(vals, i):
+            seg = vals[max(0, i - win + 1):i + 1]
+            return sum(seg) / len(seg)
+
         for n, r in enumerate(rounds, start=1):
             rid = rids[n - 1]
-            rows.append({"n": n, "round": rid,
-                         "pct": 100 * float(r["intent_rate"] or 0),
+            rows.append({"n": n, "round": rid, "pct": roll(intents, n - 1),
                          "measure": "Attack success (proposed out of scope)"})
-            rows.append({"n": n, "round": rid,
-                         "pct": 100 * float(r["enforcement_rate"] or 0),
+            rows.append({"n": n, "round": rid, "pct": roll(execs, n - 1),
                          "measure": "Executed out of scope"})
         for b in benign:
             if b.get("round_id") is not None and b.get("complete"):
@@ -344,7 +356,7 @@ def _charts(alt, benign, mo, pd, rounds, stats):
                     "Executed out of scope", "Benign suite score"],
             range=["#d1495b", "#8b2635", "#2a9d8f"])
         return mo.ui.altair_chart(
-            alt.Chart(pd.DataFrame(rows)).mark_line(point=True, strokeWidth=3).encode(
+            alt.Chart(pd.DataFrame(rows)).mark_line(point=False, strokeWidth=3).encode(
                 x=alt.X("n:Q", title="Hardening round (in order)"),
                 y=alt.Y("pct:Q", title="Percent", scale=alt.Scale(domain=[0, 100])),
                 color=alt.Color("measure:N", scale=scale, title=None,
@@ -352,7 +364,8 @@ def _charts(alt, benign, mo, pd, rounds, stats):
                 tooltip=["n", "round", "measure", alt.Tooltip("pct:Q", format=".1f")],
             ).properties(
                 height=360,
-                title="The two curves: attack success falling while benign stays flat"))
+                title="Attack success falls as the loop hardens, and benign "
+                      "competence pays part of the bill (10-round average)"))
 
     def by_category():
         cats = stats["categories"]
@@ -385,7 +398,20 @@ def _charts(alt, benign, mo, pd, rounds, stats):
 
 
 @app.cell
-def _tables(breaches, emails, mo, patches, recent, refunds, spend):
+def _tables(breaches, emails, mo, patches, recent, refunds, rounds, spend):
+    # Round ids jump to ~900,000,000 partway through a run (see _fetch), so a
+    # raw id in a table reads as corrupt data sitting next to the small early
+    # ids. Show each round's position in the run instead, matching the chart.
+    import bisect
+
+    _rids = [int(r["round_id"]) for r in rounds]
+
+    def rlabel(rid):
+        if rid is None or rid == "":
+            return "-"
+        pos = bisect.bisect_right(_rids, int(rid))
+        return str(pos) if pos else "-"
+
     def patch_panel():
         applied = [p for p in patches if p["action"] == "patch_applied"]
         held = [p for p in patches
@@ -398,7 +424,7 @@ def _tables(breaches, emails, mo, patches, recent, refunds, spend):
                "| Round | Kind | Versions | Trigger | Diagnosis |",
                "| --- | --- | --- | --- | --- |"]
         for p in applied[-12:][::-1]:
-            out.append(f"| {p.get('round_id') or '-'} | `{p.get('patch_kind') or '-'}` "
+            out.append(f"| {rlabel(p.get('round_id'))} | `{p.get('patch_kind') or '-'}` "
                        f"| `{p.get('prompt_version')}/{p.get('policy_version')}` "
                        f"| `{p.get('attack_id') or '-'}` "
                        f"| {(p.get('diagnosis') or '')[:95]} |")
@@ -407,7 +433,9 @@ def _tables(breaches, emails, mo, patches, recent, refunds, spend):
     def damage_panel():
         bad_refunds = [r for r in refunds if not r["authorized"]]
         bad_emails = [e for e in emails if not e["authorized"]]
-        total = sum(float(r["amount_usd"] or 0) for r in bad_refunds)
+        # Refund rows are stored as negative amounts (money leaving the account),
+        # so take the magnitude: "$-6,465.00" of damage reads as a rendering bug.
+        total = sum(abs(float(r["amount_usd"] or 0)) for r in bad_refunds)
         addrs = sorted({e["to_address"] for e in bad_emails})
         out = ["What the attacker actually extracted, as rows in the database:", "",
                "| | |", "| --- | --- |",
@@ -416,7 +444,9 @@ def _tables(breaches, emails, mo, patches, recent, refunds, spend):
                f"| Customer data emailed out | **{len(bad_emails)}** to "
                f"{len(addrs)} address(es) |", ""]
         if addrs:
-            out.append("Recipients: " + ", ".join(f"`{a}`" for a in addrs[:6]))
+            shown = ", ".join(f"`{a}`" for a in addrs[:6])
+            rest = len(addrs) - 6
+            out.append("Recipients: " + shown + (f" and {rest} more" if rest > 0 else ""))
         return mo.md("\n".join(out))
 
     def breach_panel():
@@ -425,7 +455,7 @@ def _tables(breaches, emails, mo, patches, recent, refunds, spend):
         out = ["| Round | Tool | Tier | Oracle said | Rule | Believed authority |",
                "| --- | --- | --- | --- | --- | --- |"]
         for b in breaches:
-            out.append(f"| {b.get('round_id') or '-'} | `{b.get('tool')}` "
+            out.append(f"| {rlabel(b.get('round_id'))} | `{b.get('tool')}` "
                        f"| {b.get('tier')} | `{b.get('oracle_code')}` "
                        f"| `{b.get('policy_rule_id')}` "
                        f"| `{b.get('escalation_source')}` |")
@@ -446,7 +476,7 @@ def _tables(breaches, emails, mo, patches, recent, refunds, spend):
             v = (f"`{e.get('prompt_version')}/{e.get('schema_version')}`"
                  if e.get("prompt_version") else "")
             out.append(f"| {e['seq']} | {e['actor']} | `{e['action']}` "
-                       f"| {e['outcome']} | {e.get('round_id') or ''} | {v} |")
+                       f"| {e['outcome']} | {rlabel(e.get('round_id'))} | {v} |")
         return mo.md("\n".join(out))
 
     return (breach_panel, damage_panel, ledger_panel, patch_panel, spend_panel)
