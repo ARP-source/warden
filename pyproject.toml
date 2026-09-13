@@ -9,6 +9,11 @@ dependencies = [
     "pydantic>=2.9",
     "httpx>=0.27",
     "tomli>=2.0; python_version<'3.11'",
+    # Required, not optional. The deployed Target installs from this list -
+    # Vercel ignores requirements.txt when a pyproject.toml is present - and
+    # leaving Weave in an extra meant traffic to the public endpoint produced
+    # no traces while the local loop traced fully.
+    "weave>=0.51",
 ]
 
 [project.optional-dependencies]
