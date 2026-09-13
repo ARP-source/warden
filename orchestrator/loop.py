@@ -83,6 +83,7 @@ class Orchestrator:
         self.last_benign: EvalReport | None = None
         self.stop_reason: str | None = None
         self._stopping = False
+        self._stalled_cycles = 0
         self._install_signal_handlers()
 
     def _install_signal_handlers(self) -> None:
@@ -222,16 +223,37 @@ class Orchestrator:
                 self.stop_reason = self.stop_reason or "kill switch"
                 break
             if self.governor.rounds_in_last_hour() >= self.cfg.limits.max_rounds_per_hour:
-                # A rate limit is a reason to wait, not to end the run.
-                self.ledger.log(
-                    ACTOR_ORCHESTRATOR, ACT_ERROR, outcome="round_rate_limited",
-                    round_id=round_id,
-                    payload={"rounds_last_hour": self.governor.rounds_in_last_hour(),
-                             "max": self.cfg.limits.max_rounds_per_hour},
-                )
+                # A rate limit is a reason to wait, not to end the run. Log the
+                # stall once rather than every retry: at one entry a minute an
+                # overnight stall buries the run's real history under hundreds
+                # of identical rows.
+                self._stalled_cycles += 1
+                if self._stalled_cycles == 1:
+                    self.ledger.log(
+                        ACTOR_ORCHESTRATOR, ACT_ERROR, outcome="round_rate_limited",
+                        round_id=round_id,
+                        payload={"rounds_last_hour": self.governor.rounds_in_last_hour(),
+                                 "max": self.cfg.limits.max_rounds_per_hour,
+                                 "note": "waiting for the hourly round allowance to "
+                                         "refill; logged once per stall"},
+                    )
+                if self._stalled_cycles >= 90:
+                    # An hour and a half of waiting means the cap is set below
+                    # what this workload needs, not that traffic is bursty.
+                    self.stop_reason = (
+                        f"stalled {self._stalled_cycles} minutes on the rounds-per-hour "
+                        f"cap of {self.cfg.limits.max_rounds_per_hour}; raise it or "
+                        f"lower attacks per round"
+                    )
+                    self.ledger.log(
+                        ACTOR_ORCHESTRATOR, ACT_HALT, outcome="rate_limit_stall",
+                        round_id=round_id, payload={"reason": self.stop_reason},
+                    )
+                    break
                 if not self._sleep(60.0):
                     break
                 continue
+            self._stalled_cycles = 0
 
             try:
                 report = self.run_round(round_id, attacks_per_round)

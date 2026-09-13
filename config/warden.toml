@@ -35,7 +35,11 @@ max_model_calls_per_round = 200
 # suite began declining for lack of allowance long before the dollar ceiling
 # was near, which is the wrong control doing the stopping.
 max_model_calls_per_hour = 9000
-max_rounds_per_hour = 60
+# The dollar ceiling is the real bound on a run. At roughly $0.0065 a round,
+# $2.00 buys about 300 rounds, so a 60/hour cap just stalled the loop in a
+# retry sleep long before any budget was at risk - the wrong control doing the
+# stopping, again.
+max_rounds_per_hour = 400
 # Wall-clock pause inserted between rounds (seconds). Keeps an overnight run polite.
 round_cooldown_s = 2.0
 # Stop the whole run after this many consecutive round-level errors.
