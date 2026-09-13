@@ -3,8 +3,10 @@
 **Live surfaces**
 
 - Deployed Target endpoint: https://warden-beryl.vercel.app (`/healthz`, `/v1/chat`, `/v1/policy`)
-- Live dashboard (molab, hosted): https://molab.marimo.io/notebooks/nb_Pxk1VkWyH1hVZsn6PBA9Cz/app
+- Live dashboard (molab, hosted): https://molab.marimo.io/notebooks/nb_y8TEU4noYmk5XK3NnTWC8K/app
+  (molab does not start a kernel on its own - click **Run it now** and allow ~30s for a cold start)
 - Weave traces: project `warden-permission-immune-system`
+- Evaluation dossier (results, evidence, safety scope): [`docs/warden-dossier.html`](docs/warden-dossier.html)
 
 An autonomous loop that continuously red-teams an AI agent's **tool-calling
 permission boundaries**, auto-patches the weaknesses it finds, and proves the
@@ -27,7 +29,7 @@ which permission tier, and whether the session authorised it.
                             │                           │
               ┌─────────────▼──────────┐   ┌────────────▼─────────────┐
               │   ATTACKER  (process)  │   │   DEFENDER  (process)    │
-              │  21 attacks, 5 documented│ │  diagnose → patch →      │
+              │  46 attacks, 15 documented││  diagnose → patch →      │
               │  categories, varied per  │ │  hot-reload → RE-TEST    │
               │  round                   │ │  → benign check → revert │
               └─────────────┬──────────┘   └────────────┬─────────────┘
@@ -143,7 +145,7 @@ banner-flagged at the top of every posture report.
 | Path | What it does |
 | --- | --- |
 | `target/` | The agent under test: oracle, policy, prompt, 4 tools, HTTP service |
-| `attacker/` | 21 attacks in 5 documented categories, varied and paraphrased per round |
+| `attacker/` | 46 attacks in 15 documented families, varied and paraphrased per round |
 | `defender/` | Diagnosis, patch validation, hot reload, re-test, auto-revert |
 | `analysis/` | Root-cause clustering and posture report generation |
 | `evals/` | The fixed 18-case benign suite and its scorer |
@@ -294,7 +296,7 @@ module works at runtime.
 python -m pytest tests/ -q
 ```
 
-69 tests, weighted toward the properties that would be embarrassing to get
+101 tests, weighted toward the properties that would be embarrassing to get
 wrong rather than toward coverage:
 
 | File | What it attacks |
