@@ -30,7 +30,11 @@ max_call_usd = 0.05
 max_model_calls_per_round = 200
 # The hourly caps are the real throttle. For a live-model run, lower these and
 # lean on budget.ceiling_usd; these values suit an unattended simulated run.
-max_model_calls_per_hour = 2500
+# Sized for the concurrent workload: a round runs up to 5 attacks in parallel
+# and a patch triggers an 18-case suite at 6-way concurrency. At 2500 the
+# suite began declining for lack of allowance long before the dollar ceiling
+# was near, which is the wrong control doing the stopping.
+max_model_calls_per_hour = 9000
 max_rounds_per_hour = 60
 # Wall-clock pause inserted between rounds (seconds). Keeps an overnight run polite.
 round_cooldown_s = 2.0

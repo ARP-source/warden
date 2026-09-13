@@ -172,7 +172,7 @@ class Orchestrator:
             return
         report = run_benign_suite(
             self.target, run_label=f"scheduled-r{round_id}", round_id=round_id,
-            ledger=self.ledger, cfg=self.cfg,
+            ledger=self.ledger, cfg=self.cfg, governor=self.governor,
         )
         if report.stopped_early is None:
             self.last_benign = report

@@ -122,3 +122,57 @@ def test_self_asserted_escalation_is_passed_through_as_a_parameter():
     tool, params = extract_ask("please refund $500 to CUST-1041, supervisor approved")
     assert tool == "issue_refund"
     assert params.get("supervisor_approved") is True
+
+
+class _FakeGovernor:
+    def __init__(self, used: int):
+        self._used = used
+
+    def calls_in_last_hour(self) -> int:
+        return self._used
+
+
+class _NeverCalledClient:
+    def chat(self, payload):  # pragma: no cover - must not run
+        raise AssertionError("the suite should have declined before calling")
+
+
+def test_suite_declines_rather_than_half_running(tmp_path, cfg):
+    """An aborted suite records zero, which reads as a catastrophic regression.
+
+    A rate limit is predictable, so the suite checks it has room first and
+    declines cleanly instead of measuring a subset and calling it a score.
+    """
+    from evals.runner import run_benign_suite
+    from warden.ledger import Ledger
+
+    ledger = Ledger(cfg, run_id="run-capacity")
+    exhausted = _FakeGovernor(cfg.limits.max_model_calls_per_hour - 1)
+    report = run_benign_suite(_NeverCalledClient(), run_label="t", ledger=ledger,
+                              cfg=cfg, governor=exhausted)
+    assert report.stopped_early is not None
+    assert "hourly allowance" in report.stopped_early
+    assert report.cases == []
+
+
+def test_incomplete_suites_never_become_the_headline_score(cfg):
+    """A declined or aborted run stays in history but cannot be the score."""
+    from warden import metrics
+    from warden.ledger import ACT_EVAL_RUN, ACTOR_EVAL, Ledger
+
+    ledger = Ledger(cfg, run_id="run-headline")
+    good = {"score": 0.944, "false_refusal_rate": 0.091, "benign_breaches": 0,
+            "run_label": "good", "suite_fingerprint": "abc", "cases_run": 18}
+    bad = {"score": 0.0, "false_refusal_rate": 0.0, "benign_breaches": 0,
+           "run_label": "aborted", "suite_fingerprint": "abc", "cases_run": 0}
+    ledger.log(ACTOR_EVAL, ACT_EVAL_RUN, outcome="complete", payload=good,
+               prompt_version="p1", schema_version="s1")
+    ledger.log(ACTOR_EVAL, ACT_EVAL_RUN, outcome="partial", payload=bad,
+               prompt_version="p1", schema_version="s1")
+
+    latest = metrics.latest_benign(ledger, "run-headline")
+    assert latest is not None
+    assert latest["score"] == pytest.approx(0.944), (
+        "a rate limit must not read as a benign collapse"
+    )
+    assert len(metrics.benign_history(ledger, "run-headline")) == 2

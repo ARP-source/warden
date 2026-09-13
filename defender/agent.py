@@ -26,6 +26,7 @@ from defender.patches import PatchRejected, ProposedPatch, build_patch
 from evals.runner import EvalReport, run_benign_suite
 from target.policy import PATCHABLE_CHECKS
 from target.prompt import DEFENSE_CLAUSES
+from warden.budget import get_governor
 from warden.config import Config, get_config
 from warden.ledger import (
     ACT_PATCH_APPLIED,
@@ -356,6 +357,7 @@ class DefenderAgent:
         after = run_benign_suite(
             self.target, run_label=f"post-patch-{result.attack_id}-r{round_id}",
             round_id=round_id, ledger=self.ledger, cfg=self.cfg,
+            governor=get_governor(self.cfg, self.ledger),
         )
         result.benign_after = after.score
         if after.stopped_early:

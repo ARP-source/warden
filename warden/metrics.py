@@ -205,7 +205,14 @@ def patch_history(ledger: Ledger, run_id: str | None = None) -> list[dict[str, A
 
 
 def latest_benign(ledger: Ledger, run_id: str | None = None) -> dict[str, Any] | None:
-    hist = benign_history(ledger, run_id)
+    """The most recent *complete* suite run.
+
+    A suite that stopped early has measured a subset of the cases, so its mean
+    is not a score and averaging it in would be wrong. Worse, an abort records
+    zero, and a rate limit would then read as a catastrophic regression. Only
+    complete runs are eligible; incomplete ones stay in the history, flagged.
+    """
+    hist = [b for b in benign_history(ledger, run_id) if b.get("complete")]
     return hist[-1] if hist else None
 
 
@@ -417,20 +424,23 @@ def tool_breakdown_any(ledger: Any, run_id: str | None = None) -> dict[str, Any]
 
 
 def latest_benign_any(ledger: Any, run_id: str | None = None) -> dict[str, Any] | None:
-    hist = benign_history_any(ledger, run_id)
+    """The most recent complete suite run. See latest_benign for why."""
+    hist = [b for b in benign_history_any(ledger, run_id) if b.get("complete")]
     return hist[-1] if hist else None
 
 
 def run_summary_any(ledger: Any, run_id: str | None = None) -> dict[str, Any]:
     attacks = attack_stats_any(ledger, run_id)
     benign = benign_history_any(ledger, run_id)
+    complete = [b for b in benign if b.get("complete")]
     patches = patch_history_any(ledger, run_id)
     return {
         "run_id": run_id or getattr(ledger, "run_id", ""),
         "backend": getattr(ledger, "backend", "sqlite"),
         "attacks": attacks,
-        "benign_latest": benign[-1] if benign else None,
-        "benign_runs": len(benign),
+        "benign_latest": complete[-1] if complete else None,
+        "benign_runs": len(complete),
+        "benign_incomplete_runs": len(benign) - len(complete),
         "patches": len([p for p in patches if p["action"] == ACT_PATCH_APPLIED]),
         "spend": spend_summary_any(ledger, run_id),
         "ledger_rows": ledger.count(),

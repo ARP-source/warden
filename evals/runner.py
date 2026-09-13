@@ -184,7 +184,7 @@ def run_benign_suite(client: Any, *, run_label: str = "", round_id: int | None =
                      ledger: Ledger | None = None, idem_prefix: str | None = None,
                      case_ids: list[str] | None = None, cfg: Any = None,
                      versions: dict[str, str] | None = None,
-                     concurrency: int = 6) -> EvalReport:
+                     concurrency: int = 6, governor: Any = None) -> EvalReport:
     """Run the suite against the deployed Target.
 
     ``client`` is anything with a ``chat(payload) -> dict`` method, which in
@@ -209,6 +209,33 @@ def run_benign_suite(client: Any, *, run_label: str = "", round_id: int | None =
     # Postgres, so a label reused by a later run would inherit the earlier
     # run's cumulative refund total and score legitimate requests as breaches.
     run_tag = getattr(ledger, "run_id", "norun")
+
+    # Preflight the hourly budget. The suite needs roughly two model calls per
+    # case; starting without room produces a half-measured suite whose mean is
+    # not a score, and an abort records zero, which reads as a catastrophic
+    # regression rather than as a rate limit. Better to decline and say so.
+    if governor is not None:
+        try:
+            needed = 2 * len(cases)
+            room = (cfg.limits.max_model_calls_per_hour
+                    - governor.calls_in_last_hour())
+            if room < needed:
+                reason = (f"declined: needs about {needed} model calls, "
+                          f"{room} left in the hourly allowance")
+                report = EvalReport(
+                    run_label=label, score=0.0, cases=[], prompt_version="",
+                    policy_version="", mode="",
+                    suite_fingerprint=suite_fingerprint(), cost_usd=0.0,
+                    stopped_early=reason,
+                )
+                ledger.log(
+                    ACTOR_EVAL, ACT_EVAL_RUN, outcome="declined", round_id=round_id,
+                    payload=report.as_dict(),
+                )
+                return report
+        except Exception:
+            # Capacity is an optimisation, not a correctness requirement.
+            pass
     def run_one(case: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any] | None, str]:
         """Run a single case. Returns (case, response, error)."""
         payload = {

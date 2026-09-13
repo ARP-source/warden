@@ -116,9 +116,12 @@ class AnalysisService:
         benign_note = None
         if target is not None:
             try:
+                from warden.budget import get_governor
+
                 fresh = run_benign_suite(
                     target, run_label=f"analysis-r{round_id}", round_id=round_id,
                     ledger=self.ledger, cfg=self.cfg,
+                    governor=get_governor(self.cfg, self.ledger),
                 )
                 if fresh.stopped_early:
                     benign_note = f"suite incomplete: {fresh.stopped_early}"

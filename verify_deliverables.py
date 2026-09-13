@@ -76,14 +76,18 @@ def main() -> int:
         rows.append(("attack success trending down", NO,
                      f"only {len(series)} rounds; need more to show a trend"))
 
+    incomplete = [b for b in benign if not b.get("complete")]
+    benign = [b for b in benign if b.get("complete")]
     if benign:
         scores = [b["score"] for b in benign]
         fingerprints = {b.get("suite_fingerprint") for b in benign}
         stable = (max(scores) - min(scores)) <= 0.15 and len(fingerprints) == 1
-        rows.append(("benign score stable", OK if stable else MEH,
-                     f"{len(benign)} runs, {min(scores):.3f} to {max(scores):.3f}, "
-                     f"latest {scores[-1]:.3f}, "
-                     f"{'one fingerprint' if len(fingerprints) == 1 else 'MIXED fingerprints'}"))
+        note = (f"{len(benign)} complete runs, {min(scores):.3f} to {max(scores):.3f}, "
+                f"latest {scores[-1]:.3f}, "
+                f"{'one fingerprint' if len(fingerprints) == 1 else 'MIXED fingerprints'}")
+        if incomplete:
+            note += f"; {len(incomplete)} run(s) aborted and excluded"
+        rows.append(("benign score stable", OK if stable else MEH, note))
     else:
         rows.append(("benign score stable", NO, "the suite has not run"))
 
