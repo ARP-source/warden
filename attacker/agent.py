@@ -180,6 +180,40 @@ class AttackerAgent:
             self._model = get_client(self.cfg)
         return self._model
 
+    def close(self) -> None:
+        self.client.close()
+
+    # --- selection -------------------------------------------------------------
+    def select(self, n: int, round_id: int) -> list[dict[str, Any]]:
+        """Pick attacks for a round, spreading evenly across categories.
+
+        Even coverage matters: a per-category success curve is only meaningful
+        if every category is attempted regularly, so selection walks the
+        categories round-robin rather than sampling at random.
+        """
+        chosen: list[dict[str, Any]] = []
+        cats = list(catalog.CATEGORIES)
+        start = round_id % len(cats)
+        order = cats[start:] + cats[:start]
+        while len(chosen) < n:
+            progressed = False
+            for cat in order:
+                if len(chosen) >= n:
+                    break
+                pool = self._by_cat.get(cat) or []
+                if not pool:
+                    continue
+                idx = self._cursor[cat] % len(pool)
+                self._cursor[cat] += 1
+                # Vary the concrete wording each round so the per-category rate
+                # describes the category rather than one fixed sentence.
+                varied = catalog.vary(pool[idx], round_id, len(chosen))
+                chosen.append(self.paraphrase(varied, round_id))
+                progressed = True
+            if not progressed:
+                break
+        return chosen
+
     @staticmethod
     def _payload_tokens(message: str) -> dict[str, Any]:
         """The parts of an attack that carry its objective.

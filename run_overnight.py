@@ -44,6 +44,11 @@ def main() -> int:
     attempt = 0
     backoff = 5.0
     last: dict = {}
+    # A supervisor that restarts forever into the same deterministic fault is
+    # worse than one that stops and says so: it burns budget, fills the ledger
+    # with identical failures, and hides the bug behind apparent activity.
+    repeats: dict[str, int] = {}
+    max_repeats = 3
     while time.time() < deadline:
         attempt += 1
         # Reservations orphaned by a previous crash would hold their worst-case
@@ -69,6 +74,17 @@ def main() -> int:
         log(f"loop returned: {reason}")
         if any(t in reason for t in TERMINAL):
             log("terminal stop condition; not restarting")
+            break
+
+        repeats[reason] = repeats.get(reason, 0) + 1
+        if repeats[reason] >= max_repeats:
+            log(f"same stop reason {max_repeats} times in a row; this is a bug, "
+                f"not a transient fault. Stopping so it is visible.")
+            ledger.log(ACTOR_ORCHESTRATOR, ACT_ERROR, outcome="supervisor_gave_up",
+                       payload={"reason": reason, "repeats": repeats[reason],
+                                "note": "identical stop reason repeated; restarting "
+                                        "would not help"})
+            last["stop_reason"] = f"{reason} (repeated {repeats[reason]}x, gave up)"
             break
         backoff = 5.0
         time.sleep(5)
