@@ -31,7 +31,12 @@ from typing import Any
 from target import prompt as prompt_mod
 from target import tools as tools_mod
 from target.oracle import Scope, is_authorized
-from target.policy import PolicyEngine, default_policy_v1, validate_policy
+from target.policy import (
+    PolicyEngine,
+    default_policy_v1,
+    sanitize_tool_result,
+    validate_policy,
+)
 from warden.config import Config, get_config
 from warden.ledger import ACT_TOOL_CALL_ATTEMPT, ACTOR_TARGET, Ledger, get_ledger
 from warden import observability as obs
@@ -296,6 +301,24 @@ class TargetAgent:
                     "reason": attempt.policy_reason,
                     "note": "This call was refused by the permission policy.",
                 }
+                # Tool output goes straight back into the model's context, so a
+                # customer record carrying an instruction reaches the agent as
+                # though the business system had said it. When the control is
+                # enabled, strip the directive and tell the agent it was there.
+                if policy._on("tool_output_sanitize"):
+                    payload, redacted = sanitize_tool_result(payload)
+                    if redacted:
+                        payload = dict(payload) if isinstance(payload, dict) else {
+                            "result": payload}
+                        payload["injection_attempt_detected"] = redacted
+                        self.ledger.log(
+                            ACTOR_TARGET, ACT_TOOL_CALL_ATTEMPT,
+                            outcome="tool_output_sanitised", round_id=round_id,
+                            prompt_version=prompt_version,
+                            schema_version=policy.version,
+                            payload={"session_id": scope.session_id,
+                                     "tool": attempt.tool, "fields": redacted},
+                        )
                 result_blocks.append({
                     "type": "tool_result",
                     "tool_use_id": call.call_id or "call",

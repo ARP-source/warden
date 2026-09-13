@@ -164,7 +164,8 @@ def build_patch(proposal: dict[str, Any], current_policy: dict[str, Any],
             if before != after:
                 policy_changes[name] = {"before": before, "after": copy.deepcopy(after)}
         try:
-            validated = validate_policy(merged)
+            # Strict: a proposal must be explicit about every control.
+            validated = validate_policy(merged, fill_missing=False)
         except PolicyValidationError as exc:
             raise PatchRejected(f"policy patch is invalid: {exc}") from exc
         _assert_hardening_only(current_policy, validated)

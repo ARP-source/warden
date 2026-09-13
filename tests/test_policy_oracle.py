@@ -83,3 +83,32 @@ def test_patching_closes_the_gap_without_blocking_legitimate_work():
     assert engine.evaluate("issue_refund", attack, SCOPE).allowed is False
     legit = {"customer_id": "CUST-1041", "amount_usd": 40, "reason": "outage"}
     assert engine.evaluate("issue_refund", legit, SCOPE).allowed is True
+
+
+def test_a_policy_predating_a_new_check_still_loads():
+    """Adding a control must not brick every version already on disk.
+
+    Introducing tool_output_sanitize mid-run made every stored policy fail
+    validation, and the Target crashed on boot with "missing
+    tool_output_sanitize" until the check was added everywhere.
+    """
+    import copy
+
+    old = copy.deepcopy(validate_policy(default_policy_v1()))
+    del old["checks"]["tool_output_sanitize"]
+
+    loaded = validate_policy(old)
+    assert "tool_output_sanitize" in loaded["checks"]
+    assert loaded["checks"]["tool_output_sanitize"]["enabled"] is False, (
+        "a newly added control defaults to its version 1 state, which is off"
+    )
+    engine = PolicyEngine(loaded, "s-old")
+    assert "G8_tool_output_unsanitised" in engine.open_gaps()
+
+
+def test_strict_mode_still_rejects_an_incomplete_proposal():
+    from target.policy import PolicyValidationError
+
+    with pytest.raises(PolicyValidationError, match="missing"):
+        validate_policy({"checks": {"tier_allowlist": {"enabled": True}}},
+                        fill_missing=False)

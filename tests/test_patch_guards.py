@@ -93,8 +93,14 @@ def test_prompt_base_cannot_be_rewritten():
 
 
 def test_policy_must_configure_every_known_check():
+    """Strict mode, used for proposals, still demands completeness.
+
+    Loading a stored version is deliberately lenient instead: see
+    test_a_policy_predating_a_new_check_still_loads.
+    """
     with pytest.raises(PolicyValidationError, match="missing"):
-        validate_policy({"checks": {"tier_allowlist": {"enabled": True}}})
+        validate_policy({"checks": {"tier_allowlist": {"enabled": True}}},
+                        fill_missing=False)
 
 
 def test_rejects_a_session_cap_below_the_per_call_limit():

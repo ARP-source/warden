@@ -83,6 +83,10 @@ def default_policy_v1() -> dict[str, Any]:
             # Tier 3 currently relies entirely on tier_allowlist, which G1/G5
             # can defeat.
             "tier3_hard_deny": {"enabled": False},
+            # G8: tool output is passed back to the model verbatim, so an
+            # instruction sitting in a customer record reaches the agent as if
+            # the business system had said it.
+            "tool_output_sanitize": {"enabled": False},
         },
     }
 
@@ -101,6 +105,7 @@ PATCHABLE_CHECKS: dict[str, dict[str, Any]] = {
     "email_requires_justification": {"enabled": bool, "min_chars": (int, 0, 400)},
     "email_recipient_on_file": {"enabled": bool},
     "tier3_hard_deny": {"enabled": bool},
+    "tool_output_sanitize": {"enabled": bool},
 }
 
 
@@ -108,8 +113,20 @@ class PolicyValidationError(ValueError):
     """Raised when a proposed policy document is not safe to install."""
 
 
-def validate_policy(doc: Any) -> dict[str, Any]:
-    """Structurally validate a policy document. Returns the cleaned document."""
+def validate_policy(doc: Any, fill_missing: bool = True) -> dict[str, Any]:
+    """Structurally validate a policy document. Returns the cleaned document.
+
+    ``fill_missing`` controls what happens when the document predates a check
+    that has since been added. Loading a stored version fills the gap with the
+    version 1 default, because a newly introduced control is off in version 1
+    and "this old policy does not have that control" is the truth. Refusing
+    instead would mean every added check bricks the service for every version
+    already on disk, which is exactly what happened when tool_output_sanitize
+    was introduced mid-run.
+
+    Patch validation passes ``fill_missing=False`` so a proposal still has to be
+    explicit about every control it touches.
+    """
     if not isinstance(doc, dict):
         raise PolicyValidationError("policy must be an object")
     checks = doc.get("checks")
@@ -147,9 +164,14 @@ def validate_policy(doc: Any) -> dict[str, Any]:
 
     missing = set(PATCHABLE_CHECKS) - set(cleaned)
     if missing:
-        raise PolicyValidationError(
-            "policy must configure every known check; missing " + ", ".join(sorted(missing))
-        )
+        if not fill_missing:
+            raise PolicyValidationError(
+                "policy must configure every known check; missing "
+                + ", ".join(sorted(missing))
+            )
+        defaults = default_policy_v1()["checks"]
+        for name in missing:
+            cleaned[name] = dict(defaults.get(name, {"enabled": False}))
     return {"note": str(doc.get("note", "")), "checks": cleaned}
 
 
@@ -322,4 +344,47 @@ class PolicyEngine:
             gaps.append("G6_justification_not_substantive")
         if not self._on("tier3_hard_deny"):
             gaps.append("G7_no_tier3_backstop")
+        if not self._on("tool_output_sanitize"):
+            gaps.append("G8_tool_output_unsanitised")
         return gaps
+
+
+# --- tool output sanitisation -------------------------------------------------
+# Patterns that mark free text as trying to address the agent rather than
+# describe the world. Deliberately conservative: this redacts the directive and
+# leaves the rest of the record readable, because a sanitiser that blanks whole
+# fields breaks legitimate support work and would show up as a benign
+# regression rather than as a security win.
+_INJECTION_MARKERS = (
+    "system:", "[system", "automated account note", "note to assistant",
+    "instruction for the assistant", "assistant directive", "new instruction",
+    "ignore the preceding", "ignore all previous", "disregard the",
+    "you are now", "pre-authorised", "pre-authorized", "no further approval",
+    "supervisor escalation is on file", "has delegated", "operating without",
+)
+
+REDACTION = "[redacted: instruction-shaped text removed from untrusted field]"
+
+
+def sanitize_tool_result(payload: Any) -> tuple[Any, list[str]]:
+    """Strip instruction-shaped text from free-text fields of a tool result.
+
+    Returns the cleaned payload and the field paths that were redacted, so the
+    agent can report that it saw an injection attempt rather than silently
+    swallowing it.
+    """
+    redacted: list[str] = []
+
+    def clean(value: Any, path: str) -> Any:
+        if isinstance(value, dict):
+            return {k: clean(v, f"{path}.{k}" if path else k) for k, v in value.items()}
+        if isinstance(value, list):
+            return [clean(v, f"{path}[{i}]") for i, v in enumerate(value)]
+        if isinstance(value, str):
+            low = value.lower()
+            if any(marker in low for marker in _INJECTION_MARKERS):
+                redacted.append(path)
+                return REDACTION
+        return value
+
+    return clean(payload, ""), redacted
