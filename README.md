@@ -247,6 +247,28 @@ Set `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `WARDEN_OPENAI_BASE_URL` and
 `WANDB_API_KEY` in the Vercel project environment. Never ship the service role
 key to a browser.
 
+## Tests
+
+```bash
+python -m pytest tests/ -q
+```
+
+69 tests, weighted toward the properties that would be embarrassing to get
+wrong rather than toward coverage:
+
+| File | What it attacks |
+| --- | --- |
+| `test_ledger.py` | Append-only enforcement and tamper detection, including dropping the guard trigger and altering history |
+| `test_budget.py` | That the ceiling cannot be exceeded, that reaching it trips the kill switch, drain mode, rate limits, idempotency, and orphan reaping |
+| `test_policy_oracle.py` | Ground truth, the shipped gaps, and that patching closes them without blocking legitimate work |
+| `test_patch_guards.py` | Eleven ways a model-authored patch could misbehave: invented checks, invented prompt text, disabling a control, raising a ceiling, out-of-bounds values |
+| `test_eval_and_loop.py` | Suite scoring, and that benign cases contain no attack markers |
+| `test_session_isolation.py` | That durable state cannot leak between runs, and that patch probes never enter the attack metrics |
+| `test_attack_fidelity.py` | That a paraphrased attack is still the same attack |
+
+The last two exist because both failures happened during live runs and both
+moved the headline number in the flattering direction.
+
 ## Evidence and documentation
 
 | Command or file | What it gives you |
