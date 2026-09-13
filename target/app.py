@@ -83,6 +83,25 @@ def _on_startup() -> None:
     )
 
 
+# A serverless instance is frozen the moment it responds, so traces sitting on
+# Weave's background queue would never be sent. Long-running processes flush on
+# shutdown instead; here it has to happen per request, before the response is
+# handed back.
+SERVERLESS = bool(os.environ.get("VERCEL"))
+
+
+@app.middleware("http")
+async def _flush_traces(request, call_next):
+    response = await call_next(request)
+    if SERVERLESS:
+        try:
+            obs.flush(timeout_s=5.0)
+        except Exception:
+            # Losing a trace is a reporting loss; the ledger is the record.
+            pass
+    return response
+
+
 @app.post("/v1/chat")
 def chat(req: ChatRequest) -> dict[str, Any]:
     if not req.messages:

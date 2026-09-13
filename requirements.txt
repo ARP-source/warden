@@ -1,3 +1,7 @@
 fastapi>=0.115
 pydantic>=2.9
 httpx>=0.27
+# Tracing for requests that arrive at the deployed endpoint. Heavier than the
+# rest of this file combined, and it costs cold-start latency, but without it
+# traffic a reviewer sends to the public URL produces no traces at all.
+weave>=0.51
