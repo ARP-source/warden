@@ -363,4 +363,6 @@ class Orchestrator:
         return summary
 
     def close(self) -> None:
+        # Traces are queued in the background; a prompt exit drops the tail.
+        obs.flush()
         self.target.close()

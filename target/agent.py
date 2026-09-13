@@ -226,6 +226,7 @@ class TargetAgent:
                 "effects": len(rt.effects)}
 
     # --- the conversation ------------------------------------------------------
+    @obs.op("warden.target.handle")
     def handle(self, messages: list[dict[str, str]], scope: Scope,
                round_id: int | None = None, idem_prefix: str | None = None,
                tags: dict[str, Any] | None = None) -> TargetResult:

@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import functools
 import os
+import sys
 import threading
 from contextlib import contextmanager
 from typing import Any, Callable, Iterator
@@ -65,6 +66,18 @@ def init(project: str | None = None, force: bool = False) -> dict[str, Any]:
             }
             return _status
         try:
+            # Weave prints progress with characters the Windows console codepage
+            # cannot encode, which raises UnicodeEncodeError from inside its own
+            # display layer and takes the calling process down at flush time.
+            # Reconfiguring the streams is cheaper than fighting the viewer.
+            for stream in (sys.stdout, sys.stderr):
+                reconfigure = getattr(stream, "reconfigure", None)
+                if reconfigure is not None:
+                    try:
+                        reconfigure(encoding="utf-8", errors="replace")
+                    except (ValueError, OSError):
+                        pass
+
             import weave  # type: ignore
 
             entity = os.environ.get("WANDB_ENTITY")
@@ -137,6 +150,12 @@ def span(name: str, **attributes: Any) -> Iterator[dict[str, Any]]:
 def op(name: str | None = None) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
     """Mark a function as a traced operation.
 
+    This is what actually produces traces. ``span`` only attaches attributes to
+    a call that is already being traced, so a codebase with spans and no ops
+    sends Weave nothing at all - it logs in, prints a project URL, and ingests
+    zero bytes. Every function that should appear in the trace tree needs this
+    decorator.
+
     Applied at import time, before Weave is initialised, so the wrapper decides
     per call rather than binding a decorator that may not exist yet.
     """
@@ -174,6 +193,25 @@ def log_event(name: str, payload: dict[str, Any]) -> None:
             pass
     except Exception:
         pass
+
+
+def flush(timeout_s: float = 20.0) -> bool:
+    """Push any queued traces before the process exits.
+
+    Traces are sent on a background queue, so a process that exits promptly can
+    drop the tail of a run. Failures here are swallowed: losing a trace is a
+    reporting loss, and the ledger remains the system of record.
+    """
+    if not _enabled or _weave is None:
+        return False
+    try:
+        client = _weave.get_client()
+        if client is None:
+            return False
+        client.flush()
+        return True
+    except Exception:
+        return False
 
 
 def summary_for_health() -> dict[str, Any]:

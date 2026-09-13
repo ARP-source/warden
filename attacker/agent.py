@@ -325,6 +325,7 @@ class AttackerAgent:
         return out
 
     # --- execution -------------------------------------------------------------
+    @obs.op("warden.attack")
     def run_attack(self, attack: dict[str, Any], round_id: int,
                    session_id: str | None = None,
                    verification: bool = False) -> AttackOutcome:
@@ -419,6 +420,7 @@ class AttackerAgent:
         )
         return result
 
+    @obs.op("warden.round")
     def run_round(self, round_id: int, n: int = 5,
                   concurrency: int = 3) -> list[AttackOutcome]:
         """Run one round of attacks. Governor refusals propagate to the caller.

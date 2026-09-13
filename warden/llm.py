@@ -247,6 +247,7 @@ class ModelClient:
         if actual == "simulated":
             self.mode = "simulated"
 
+    @obs.op("warden.model_call")
     def call(self, role: str, *, system: str = "", messages: list[dict[str, Any]] | None = None,
              tools: list[dict[str, Any]] | None = None, max_tokens: int | None = None,
              temperature: float = 1.0, round_id: int | None = None,

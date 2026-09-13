@@ -222,6 +222,7 @@ class DefenderAgent:
         }
 
     # --- the defence cycle -----------------------------------------------------
+    @obs.op("warden.defend")
     def defend(self, outcome: AttackOutcome, round_id: int,
                benign_before: EvalReport | None = None) -> PatchResult:
         """Patch, verify against the same attack, then guard against regression."""

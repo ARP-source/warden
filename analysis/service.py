@@ -23,6 +23,7 @@ from analysis.cluster import cluster_successes
 from analysis.report import render_report, render_report_sections, render_report_tail
 from evals.runner import run_benign_suite
 from warden import metrics
+from warden import observability as obs
 from warden.config import Config, get_config, resolved_mode, resolved_store
 from warden.ledger import ACT_ANALYSIS_REPORT, ACTOR_ANALYSIS, get_ledger
 from warden.llm import ModelClient, get_client
@@ -92,6 +93,7 @@ class AnalysisService:
             return None
 
     # --- the pass --------------------------------------------------------------
+    @obs.op("warden.analysis")
     def run(self, round_id: int | None = None, target: Any = None,
             window_rounds: int | None = None,
             run_id: str | None = None) -> dict[str, Any]:
