@@ -218,14 +218,14 @@ def _load(fetch, refresh, rpc, safe):
     run_id = "warden-v3"
     flt = {"run_id": f"eq.{run_id}"}
 
-    # Real hardening rounds are small integers. The benchmark reuses this run's
-    # tool endpoint and tags its probes with synthetic round ids near 900,000,000
-    # (round*1000+index), so a handful leaked into this run's series. Excluding
-    # them keeps the curve's x-axis on the real rounds instead of stretching it
-    # to 900M and crushing the actual data against the origin.
-    round_flt = {**flt, "round_id": "lt.1000000"}
+    # Round ids are chronological but not contiguous. benchmark_models.py stamps
+    # its benign suite at round*1000+900 to dodge the per-round cap, and the
+    # orchestrator then resumes numbering from that maximum, so every later
+    # hardening round inherits a ~900,000,000 id. Those are real rounds, not
+    # probes: filtering them out silently froze this curve. Keep them all, order
+    # by id, and let the chart plot position so the axis stays readable.
     rounds = safe(lambda: fetch("warden_v_attack_rounds",
-                                {**round_flt, "order": "round_id.asc"}), [])
+                                {**flt, "order": "round_id.asc"}), [])
     categories = safe(lambda: fetch("warden_v_attack_categories", flt), [])
     benign = safe(lambda: fetch("warden_v_benign_history", {**flt, "order": "seq.asc"}), [])
     patches = safe(lambda: fetch("warden_v_patch_history", {**flt, "order": "seq.asc"}), [])
@@ -313,29 +313,43 @@ def _charts(alt, benign, mo, pd, rounds, stats):
     def curves():
         if not rounds:
             return mo.md("_No rounds recorded yet._")
+        # Plot position, not the raw round id: the ids jump to ~900,000,000
+        # partway through the run (see _fetch), which would crush every point
+        # against the origin. Position keeps the axis honest and even, and the
+        # real id stays in the tooltip.
+        import bisect
+
         rows = []
-        for r in rounds:
-            rid = int(r["round_id"])
-            rows.append({"round": rid, "pct": 100 * float(r["intent_rate"] or 0),
+        rids = [int(r["round_id"]) for r in rounds]
+        for n, r in enumerate(rounds, start=1):
+            rid = rids[n - 1]
+            rows.append({"n": n, "round": rid,
+                         "pct": 100 * float(r["intent_rate"] or 0),
                          "measure": "Attack success (proposed out of scope)"})
-            rows.append({"round": rid, "pct": 100 * float(r["enforcement_rate"] or 0),
+            rows.append({"n": n, "round": rid,
+                         "pct": 100 * float(r["enforcement_rate"] or 0),
                          "measure": "Executed out of scope"})
         for b in benign:
             if b.get("round_id") is not None and b.get("complete"):
-                rows.append({"round": int(b["round_id"]),
-                             "pct": 100 * float(b["score"] or 0),
-                             "measure": "Benign suite score"})
+                brid = int(b["round_id"])
+                # Benign rounds do not always coincide with an attack round, so
+                # place each at the last attack round at or before it.
+                pos = bisect.bisect_right(rids, brid)
+                if pos:
+                    rows.append({"n": pos, "round": brid,
+                                 "pct": 100 * float(b["score"] or 0),
+                                 "measure": "Benign suite score"})
         scale = alt.Scale(
             domain=["Attack success (proposed out of scope)",
                     "Executed out of scope", "Benign suite score"],
             range=["#d1495b", "#8b2635", "#2a9d8f"])
         return mo.ui.altair_chart(
             alt.Chart(pd.DataFrame(rows)).mark_line(point=True, strokeWidth=3).encode(
-                x=alt.X("round:Q", title="Round"),
+                x=alt.X("n:Q", title="Hardening round (in order)"),
                 y=alt.Y("pct:Q", title="Percent", scale=alt.Scale(domain=[0, 100])),
                 color=alt.Color("measure:N", scale=scale, title=None,
                                 legend=alt.Legend(orient="top", labelFontSize=13)),
-                tooltip=["round", "measure", alt.Tooltip("pct:Q", format=".1f")],
+                tooltip=["n", "round", "measure", alt.Tooltip("pct:Q", format=".1f")],
             ).properties(
                 height=360,
                 title="The two curves: attack success falling while benign stays flat"))
