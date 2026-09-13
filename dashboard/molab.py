@@ -218,7 +218,14 @@ def _load(fetch, refresh, rpc, safe):
     run_id = "warden-v3"
     flt = {"run_id": f"eq.{run_id}"}
 
-    rounds = safe(lambda: fetch("warden_v_attack_rounds", {**flt, "order": "round_id.asc"}), [])
+    # Real hardening rounds are small integers. The benchmark reuses this run's
+    # tool endpoint and tags its probes with synthetic round ids near 900,000,000
+    # (round*1000+index), so a handful leaked into this run's series. Excluding
+    # them keeps the curve's x-axis on the real rounds instead of stretching it
+    # to 900M and crushing the actual data against the origin.
+    round_flt = {**flt, "round_id": "lt.1000000"}
+    rounds = safe(lambda: fetch("warden_v_attack_rounds",
+                                {**round_flt, "order": "round_id.asc"}), [])
     categories = safe(lambda: fetch("warden_v_attack_categories", flt), [])
     benign = safe(lambda: fetch("warden_v_benign_history", {**flt, "order": "seq.asc"}), [])
     patches = safe(lambda: fetch("warden_v_patch_history", {**flt, "order": "seq.asc"}), [])
@@ -296,7 +303,7 @@ def _header(chain, mo, run_id, stats):
              f"{stats['executed']} reached a tool"),
         tile("Benign suite", f"{100*b['score']:.1f}%" if b else "not run",
              f"false refusals {100*b['false_refusal_rate']:.1f}%" if b else ""),
-        tile("Spend", f"${stats['spend']:.2f}", f"{stats['calls']:,} model calls"),
+        tile("Spend (this run)", f"${stats['spend']:.2f}", f"{stats['calls']:,} model calls, modelled"),
     ], gap=0.7, wrap=True)
     return header, tiles
 
