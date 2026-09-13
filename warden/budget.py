@@ -109,9 +109,10 @@ CREATE INDEX IF NOT EXISTS idx_ops_ts    ON budget_ops(ts);
 CREATE INDEX IF NOT EXISTS idx_ops_round ON budget_ops(round_id);
 
 CREATE TABLE IF NOT EXISTS round_marks (
-    round_id  INTEGER PRIMARY KEY,
-    ts        TEXT NOT NULL,
-    run_id    TEXT NOT NULL DEFAULT ''
+    run_id    TEXT    NOT NULL DEFAULT '',
+    round_id  INTEGER NOT NULL,
+    ts        TEXT    NOT NULL,
+    PRIMARY KEY (run_id, round_id)
 );
 CREATE INDEX IF NOT EXISTS idx_rounds_ts ON round_marks(ts);
 """
@@ -196,8 +197,8 @@ class BudgetGovernor:
         conn = self._conn()
         with self._lock:
             conn.execute(
-                "INSERT OR IGNORE INTO round_marks (round_id, ts, run_id) VALUES (?,?,?)",
-                (round_id, utc_now_iso(), self.ledger.run_id),
+                "INSERT OR IGNORE INTO round_marks (run_id, round_id, ts) VALUES (?,?,?)",
+                (self.ledger.run_id, round_id, utc_now_iso()),
             )
 
     def _since_iso(self, seconds: int) -> str:
@@ -213,17 +214,22 @@ class BudgetGovernor:
         return int(row["c"])
 
     def calls_in_round(self, round_id: int | None) -> int:
+        """Scoped to this run: round numbers repeat between runs, so counting
+        them globally would make a fresh run inherit an older run's usage and
+        trip its own per-round limit before doing any work."""
         if round_id is None:
             return 0
         row = self._conn().execute(
-            "SELECT COUNT(*) AS c FROM budget_ops WHERE round_id = ? AND state != 'released'",
-            (round_id,),
+            "SELECT COUNT(*) AS c FROM budget_ops"
+            " WHERE round_id = ? AND run_id = ? AND state != 'released'",
+            (round_id, self.ledger.run_id),
         ).fetchone()
         return int(row["c"])
 
     def rounds_in_last_hour(self) -> int:
         row = self._conn().execute(
-            "SELECT COUNT(*) AS c FROM round_marks WHERE ts >= ?", (self._since_iso(3600),)
+            "SELECT COUNT(*) AS c FROM round_marks WHERE ts >= ? AND run_id = ?",
+            (self._since_iso(3600), self.ledger.run_id),
         ).fetchone()
         return int(row["c"])
 

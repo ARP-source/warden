@@ -100,3 +100,42 @@ def test_unknown_model_is_priced_pessimistically(governor):
     cheap = governor.project_cost(governor.cfg.models.target, 1000, 1000)
     unknown = governor.project_cost("some-model-we-never-heard-of", 1000, 1000)
     assert unknown > cheap
+
+
+def test_per_round_limit_is_scoped_to_the_run(cfg, tmp_path):
+    """Round numbers repeat between runs, so the limit must not be shared.
+
+    A fresh run whose round 1 inherited every earlier run's round 1 would trip
+    its own per-round limit before doing any work. That happened for real.
+    """
+    from warden.budget import BudgetGovernor
+    from warden.ledger import Ledger
+
+    model = cfg.models.target
+    first = Ledger(cfg, run_id="run-one")
+    gov_one = BudgetGovernor(cfg, first, db_path=cfg.ledger_db)
+    for _ in range(6):
+        res = gov_one.reserve("target", model, 40, 20, round_id=1)
+        gov_one.settle(res, 40, 20)
+    assert gov_one.calls_in_round(1) == 6
+
+    second = Ledger(cfg, run_id="run-two")
+    gov_two = BudgetGovernor(cfg, second, db_path=cfg.ledger_db)
+    assert gov_two.calls_in_round(1) == 0, (
+        "a new run must start round 1 with a clean per-round count"
+    )
+    assert gov_two.rounds_in_last_hour() == 0
+
+
+def test_round_marks_do_not_collide_between_runs(cfg):
+    from warden.budget import BudgetGovernor
+    from warden.ledger import Ledger
+
+    one = BudgetGovernor(cfg, Ledger(cfg, run_id="run-a"), db_path=cfg.ledger_db)
+    two = BudgetGovernor(cfg, Ledger(cfg, run_id="run-b"), db_path=cfg.ledger_db)
+    one.mark_round(1)
+    two.mark_round(1)
+    assert one.rounds_in_last_hour() == 1
+    assert two.rounds_in_last_hour() == 1, (
+        "run B's round 1 must be recorded even though run A already used that number"
+    )

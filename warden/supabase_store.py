@@ -318,6 +318,7 @@ class SupabaseGovernor:
         out = self.client.rpc("warden_budget_snapshot", {
             "p_ceiling": self.cfg.budget.ceiling_usd,
             "p_reserve_floor": self.cfg.budget.reserve_floor_usd,
+            "p_run_id": getattr(self.ledger, "run_id", None),
         })
         if isinstance(out, list):
             out = out[0] if out else {}
@@ -339,10 +340,13 @@ class SupabaseGovernor:
         return int(self._snapshot_raw().get("rounds_last_hour") or 0)
 
     def calls_in_round(self, round_id: int | None) -> int:
+        """Scoped to this run: round numbers repeat between runs."""
         if round_id is None:
             return 0
-        return self.client.count("warden_budget_ops",
-                                 {"round_id": f"eq.{round_id}", "state": "neq.released"})
+        return self.client.count("warden_budget_ops", {
+            "round_id": f"eq.{round_id}", "state": "neq.released",
+            "run_id": f"eq.{getattr(self.ledger, 'run_id', '')}",
+        })
 
     # --- kill switch -----------------------------------------------------------
     def is_halted(self) -> bool:
@@ -367,9 +371,10 @@ class SupabaseGovernor:
 
     def mark_round(self, round_id: int) -> None:
         self.client.insert("warden_round_marks",
-                           {"round_id": round_id, "run_id": getattr(self.ledger, "run_id", ""),
+                           {"round_id": round_id,
+                            "run_id": getattr(self.ledger, "run_id", ""),
                             "ts": utc_now_iso()},
-                           upsert=True, on_conflict="round_id", returning=False)
+                           upsert=True, on_conflict="run_id,round_id", returning=False)
 
     # --- state -----------------------------------------------------------------
     def state(self) -> str:
