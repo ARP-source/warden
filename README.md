@@ -353,7 +353,6 @@ moved the headline number in the flattering direction.
 | `python verify_deliverables.py` | Checks each deliverable against the ledger and prints PASS, PARTIAL or MISSING with the evidence. Nothing marked MISSING should be claimed. |
 | `reports/posture-latest.md` | The generated security posture report for the most recent run. |
 | `docs/DEMO.md` | Live demo script and a walkthrough of how to read the posture report. |
-| `docs/CLIP.md` | Shot list for the 45-second clip. |
 | `warden status` | Run summary as JSON. |
 | `warden verify` | Recomputes the audit hash chain. |
 

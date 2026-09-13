@@ -9,3 +9,7 @@ __pycache__/
 node_modules/
 
 .vercel
+
+# Recording storyboard - the video is submitted on the hackathon platform,
+# not in the repo. Kept locally for reference.
+docs/CLIP.md
