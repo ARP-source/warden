@@ -295,6 +295,57 @@ obfuscation, many-shot, reasoning injection, payload splitting, tool-output inje
 suppression, and crescendo — each with paraphrase variants that preserve the attack's objective,
 so paraphrasing cannot accidentally defang the test.</p>
 
+<h2><span class="n">§8</span>Would a company buy this?</h2>
+<p><strong>Who has the problem.</strong> Any company putting an LLM agent behind real tools —
+support desks that issue refunds, ops agents that change accounts, internal automation that sends
+mail. The buyer is the platform or security team that has to sign off on giving an agent the
+ability to move money or touch customer records.</p>
+
+<p><strong>Why they cannot solve it by choosing carefully.</strong> That is what §1 measures. All
+seven production models executed forbidden actions about one time in five, and the spread between
+best and worst was 19.6% to 26.1% — too narrow to pick your way out of. Swapping models does not
+fix it, and neither does a better system prompt, because the attack succeeds by convincing the
+model. The control has to sit outside the model, on the tool call itself.</p>
+
+<p><strong>What is actually being sold.</strong> Not a prompt and not a filter: an enforcement
+layer on tool calls, plus a continuous red-team that proves the layer still holds as models,
+prompts and tools change. The second half is the part a security team cannot get anywhere else —
+every tightening ships with evidence it did not break legitimate work, which is the reason
+tightenings normally never ship.</p>
+
+<h3>How a customer would integrate it</h3>
+<p>The loop is already decoupled from the agent. It talks over HTTP to a configurable
+<span class="mono">base_url</span> and judges <strong>structured tool-call events</strong> — which
+tool, which arguments, which tier, whether the session authorised it — never model text. So it does
+not care what framework the agent is built on, or whether it is even Python.</p>
+<ul>
+  <li><strong>The customer exposes</strong> their agent behind a chat endpoint that reports the tool calls it makes.</li>
+  <li><strong>The customer supplies</strong> two things: their tool tiers and authorisation rules (the oracle), and a benign suite of requests their agent must keep serving.</li>
+  <li><strong>Warden supplies</strong> the attacker catalogue, the enforcement policy, the patch loop with its revert guard, the budget governor, and the audit ledger.</li>
+</ul>
+
+<h3>What adoption actually costs, stated honestly</h3>
+<p>The oracle is currently <strong>hardcoded in Python</strong> — four tools in a dictionary in
+<span class="mono">target/oracle.py</span>. A customer describing their own tools edits source
+today; it should be a config file, and that is the first item on the roadmap below. The benign
+suite also has to be written per customer: eighteen cases here, drawn from real legitimate
+requests. That is days of work, not months, but it is not zero and it is not automatic.</p>
+
+<h3>Deliberately not built yet</h3>
+<ul>
+  <li><strong>Config-driven oracle</strong> — so tool tiers and limits are declared, not coded. The single biggest adoption blocker.</li>
+  <li><strong>Multi-tenancy</strong> — one run, one agent. No per-customer isolation.</li>
+  <li><strong>Authentication on the admin endpoints</strong> — <span class="mono">/admin/halt</span> and friends are unauthenticated; fine behind a private network, not fine on the internet.</li>
+  <li><strong>Alerting and SLA integration</strong> — the ledger knows when a breach executes; nothing pages anyone.</li>
+</ul>
+
+<p><strong>Why it would survive contact with a real company.</strong> The parts that usually kill a
+prototype in procurement are the parts that already exist: a tamper-evident audit trail that
+survived a real crash, a spend governor with a kill switch that has actually fired, row-level
+security on the database, 101 tests, and a verification script that reports what is true rather
+than what is claimed. The remaining work is integration surface, which is ordinary engineering.
+The hard part — proving a security change did not break the product — is the part that is done.</p>
+
 <footer>
   <p>Warden — Agent Permission Immune System · build <span class="mono">demo-base-v1</span> ·
   figures from run <span class="mono">warden-v3</span> and benchmark

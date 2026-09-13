@@ -254,6 +254,40 @@ constructed, the run degrades to the labelled doubles rather than dying at 2am.
 process, which would otherwise hold their worst-case projection against the
 ceiling forever.
 
+## Could a company actually run this?
+
+**The problem is not solvable by choosing carefully.** All seven production models we
+benchmarked executed forbidden actions about one time in five, across a range of only
+19.6% to 26.1% - too narrow to pick your way out of. A better system prompt does not
+help either, because the attack succeeds by convincing the model. The control has to
+sit outside the model, on the tool call.
+
+**Warden is already decoupled from the agent.** The loop talks over HTTP to a
+configurable `base_url` and judges **structured tool-call events** - which tool, which
+arguments, which tier, whether the session authorised it - never model text. It does
+not care what framework the agent is built on, or whether it is Python at all.
+
+To adopt it, a customer supplies two things:
+
+| They supply | We supply |
+| --- | --- |
+| Their tool tiers and authorisation rules (the oracle) | Attacker catalogue, enforcement policy, patch loop with revert guard |
+| A benign suite of requests the agent must keep serving | Budget governor, audit ledger, verification script |
+
+**What that costs, honestly.** The oracle is currently hardcoded - four tools in a dict
+in `target/oracle.py` - so describing your own tools means editing source today. Making
+it config-driven is the first item on the roadmap and the single biggest adoption
+blocker. The benign suite is written per customer (18 cases here). Days of work, not
+months, but not zero.
+
+**Deliberately not built yet:** config-driven oracle, multi-tenancy, authentication on
+the `/admin/*` endpoints, alerting/SLA integration.
+
+Run the Target in your own infrastructure with the included `Dockerfile`; it keeps no
+durable state, so it is safe to kill and reschedule at any point.
+
+See [`docs/warden-dossier.html`](docs/warden-dossier.html) §8 for the full argument.
+
 ## Deployment
 
 The Target deploys to Vercel as a serverless function (`api/index.py`,
