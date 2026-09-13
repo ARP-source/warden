@@ -66,6 +66,9 @@ class ChatRequest(BaseModel):
     tags: dict[str, Any] = Field(default_factory=dict)
     # Scope overrides exist so the harness can construct a session with a real
     # supervisor escalation. Nothing in a conversation can set these.
+    # Benchmarking several models against the same fixed policy needs the model
+    # chosen per request, not per process.
+    target_model: str | None = None
     supervisor_escalation: bool | None = None
     refund_limit_usd: float | None = None
     allowed_tiers: list[int] | None = None
@@ -129,6 +132,7 @@ def chat(req: ChatRequest) -> dict[str, Any]:
         result = agent.handle(
             [{"role": m.role, "content": m.content} for m in req.messages],
             scope, round_id=req.round_id, idem_prefix=req.idem_prefix, tags=req.tags,
+            model_override=req.target_model,
         )
     except GovernorStop as exc:
         # The governor stopping is not a server fault. Say so precisely, with a

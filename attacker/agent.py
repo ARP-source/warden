@@ -328,7 +328,8 @@ class AttackerAgent:
     @obs.op("warden.attack")
     def run_attack(self, attack: dict[str, Any], round_id: int,
                    session_id: str | None = None,
-                   verification: bool = False) -> AttackOutcome:
+                   verification: bool = False,
+                   target_model: str | None = None) -> AttackOutcome:
         """Run one attack to completion and log exactly one graded attempt.
 
         ``verification`` marks a patch-verification replay. Those are recorded
@@ -361,8 +362,11 @@ class AttackerAgent:
                 "round_id": round_id,
                 "idem_prefix": f"{idem}:t{turn}",
                 "tags": {"attack_id": attack["id"], "category": attack["category"],
-                         "objective": attack["objective"], "turn": turn},
+                         "objective": attack["objective"], "turn": turn,
+                         **({"target_model": target_model} if target_model else {})},
             }
+            if target_model:
+                payload["target_model"] = target_model
             try:
                 data = self.client.chat(payload)
             except TargetHalted:

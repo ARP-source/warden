@@ -234,7 +234,8 @@ class TargetAgent:
     @obs.op("warden.target.handle")
     def handle(self, messages: list[dict[str, str]], scope: Scope,
                round_id: int | None = None, idem_prefix: str | None = None,
-               tags: dict[str, Any] | None = None) -> TargetResult:
+               tags: dict[str, Any] | None = None,
+               model_override: str | None = None) -> TargetResult:
         """Run one conversation to completion and return every judgement made."""
         self.reload()
         prompt_doc, prompt_version, policy = self.active_pair()
@@ -270,6 +271,7 @@ class TargetAgent:
                     max_tokens=self.cfg.target.max_output_tokens,
                     round_id=round_id, idem_key=idem,
                     context={"session_id": scope.session_id, **(tags or {})},
+                    model_override=model_override,
                 )
             except PermanentLLMError as exc:
                 error = f"model call failed: {exc}"
@@ -346,7 +348,8 @@ class TargetAgent:
             policy_version=self.policy.version, mode=self.client.mode,
             # Report the model that actually served the call, not the one the
             # Anthropic column of the config happens to name.
-            model=self.cfg.model_for("target", self.client.provider_name),
+            model=(model_override
+                   or self.cfg.model_for("target", self.client.provider_name)),
             iterations=iterations, cost_usd=cost, error=error,
         )
 

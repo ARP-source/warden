@@ -252,9 +252,13 @@ class ModelClient:
              tools: list[dict[str, Any]] | None = None, max_tokens: int | None = None,
              temperature: float = 1.0, round_id: int | None = None,
              idem_key: str | None = None, max_attempts: int = 4,
-             context: dict[str, Any] | None = None) -> LLMResponse:
+             context: dict[str, Any] | None = None,
+             model_override: str | None = None) -> LLMResponse:
         messages = messages or []
-        model = self.cfg.model_for(role, self.provider_name)
+        # An override lets one process benchmark several models without a
+        # restart. Pricing still comes from the table, so an unknown model is
+        # costed pessimistically rather than free.
+        model = model_override or self.cfg.model_for(role, self.provider_name)
         max_out = max_tokens or self.cfg.target.max_output_tokens
         est_in = estimate_input_tokens(system, messages, tools)
 
