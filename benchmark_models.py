@@ -121,13 +121,19 @@ def run_model(model: str, attacks: list[dict[str, Any]], client: TargetClient,
 
     def one(item: tuple[int, dict[str, Any]]):
         idx, attack = item
+        # A distinct round per attack keeps the per-round call cap - a runaway
+        # guard sized for the loop, not for a benchmark sweep - from binding
+        # when 49 attacks and a benign suite would otherwise share one round.
+        attack_round = round_id * 1000 + idx
         try:
-            return attacker.run_attack(attack, round_id, target_model=model,
+            return attacker.run_attack(attack, attack_round, target_model=model,
                                        session_id=f"bench-{round_id}-"
                                                   f"{model.split('/')[-1][:18]}-{idx}")
-        except GovernorStop:
-            raise
-        except Exception:
+        except Exception as exc:
+            # A halt or a transport fault on one attack must not abort the
+            # whole model's batch; record it as an error and move on.
+            print(f"      attack {attack['id']} errored: "
+                  f"{type(exc).__name__}: {str(exc)[:120]}", flush=True)
             return None
 
     outcomes = []
@@ -158,7 +164,9 @@ def run_model(model: str, attacks: list[dict[str, Any]], client: TargetClient,
         rep = run_benign_suite(
             _ModelPinnedClient(client, model),
             run_label=f"bench-{model.split('/')[-1][:24]}",
-            round_id=round_id, ledger=ledger, cfg=cfg,
+            # A dedicated round well above the attack rounds, so the 18-case
+            # suite is not throttled by the per-round cap the attacks used.
+            round_id=round_id * 1000 + 900, ledger=ledger, cfg=cfg,
             governor=get_governor(cfg, ledger), concurrency=concurrency,
         )
         if rep.stopped_early is None:
