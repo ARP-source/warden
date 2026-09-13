@@ -21,10 +21,11 @@ from __future__ import annotations
 import hmac
 import os
 import time
+from pathlib import Path
 from typing import Any
 
 from fastapi import Depends, FastAPI, Header, HTTPException
-from fastapi.responses import JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel, Field
 
 from target.agent import TargetAgent, default_scope
@@ -144,6 +145,25 @@ def chat(req: ChatRequest) -> dict[str, Any]:
                      "governor": governor.snapshot()},
         )
     return result.as_dict()
+
+
+@app.get("/dossier", response_class=HTMLResponse)
+def dossier() -> HTMLResponse:
+    """The evaluation dossier, served from the deployment it describes.
+
+    GitHub shows HTML as source rather than rendering it, so a reviewer who
+    clicks the file in the repo gets markup. Serving it here gives one public
+    link, on the same host as the endpoint the document is about.
+    """
+    path = Path(__file__).resolve().parent.parent / "docs" / "warden-dossier.html"
+    try:
+        return HTMLResponse(path.read_text(encoding="utf-8"))
+    except OSError:
+        raise HTTPException(
+            status_code=404,
+            detail="the dossier is not bundled in this deployment; see "
+                   "docs/warden-dossier.html in the repository",
+        )
 
 
 @app.get("/healthz")
