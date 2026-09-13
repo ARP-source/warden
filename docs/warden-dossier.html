@@ -102,7 +102,7 @@ patches the enforcement policy when attacks get through, and proves each patch d
 normal behavior before keeping it.</p>
 <ul class="facts">
   <li>Build <span class="mono">demo-base-v1</span></li>
-  <li>Audit ledger 44,023 rows, chain verified</li>
+  <li>Audit ledger 55,542 rows, chain verified</li>
   <li>101 tests passing</li>
   <li>CoreWeave Hacks (W&amp;B)</li>
 </ul>
@@ -114,7 +114,7 @@ matters is the <strong>executed</strong> rate — attacks that didn't just trick
 <em>proposing</em> a forbidden tool call, but actually got the call through the gate.</p>
 
 <div class="chartwrap">
-  <svg viewBox="0 0 700 210" role="img" aria-label="Undefended production models: 65.5 percent manipulated, 22.4 percent executed. Warden first rounds: 8.0 percent manipulated, 2.0 percent executed. Warden latest rounds: 2.3 percent manipulated, 0.0 percent executed.">
+  <svg viewBox="0 0 700 210" role="img" aria-label="Undefended production models: 65.5 percent manipulated, 22.4 percent executed. Warden first quarter of the run: 5.6 percent manipulated, 0.7 percent executed. Warden latest quarter: 3.3 percent manipulated, 0.0 percent executed.">
     <g font-size="11" fill="var(--muted)" font-family="ui-monospace, Menlo, Consolas, monospace">
       <text x="0" y="200">0%</text>
       <text x="150" y="200" text-anchor="middle">20%</text>
@@ -130,23 +130,26 @@ matters is the <strong>executed</strong> rate — attacks that didn't just trick
       <text x="176" y="41" font-size="11.5" fill="var(--ink)" font-family="ui-monospace, Menlo, monospace">22.4% executed</text>
       <text x="499" y="41" font-size="11.5" fill="var(--muted)" font-family="ui-monospace, Menlo, monospace">65.5%</text>
 
-      <text x="0" y="80" font-size="12.5" fill="var(--ink)">Warden loop · first rounds</text>
-      <rect x="0" y="88" width="60" height="22" fill="var(--bar-bg)"/>
-      <rect x="0" y="88" width="15" height="22" fill="var(--bar-crit)"/>
-      <text x="68" y="103" font-size="11.5" fill="var(--muted)" font-family="ui-monospace, Menlo, monospace">8.0% manipulated · 2.0% executed</text>
+      <text x="0" y="80" font-size="12.5" fill="var(--ink)">Warden loop · first quarter of the run</text>
+      <rect x="0" y="88" width="42" height="22" fill="var(--bar-bg)"/>
+      <rect x="0" y="88" width="5" height="22" fill="var(--bar-crit)"/>
+      <text x="50" y="103" font-size="11.5" fill="var(--muted)" font-family="ui-monospace, Menlo, monospace">5.6% manipulated · 0.7% executed</text>
 
-      <text x="0" y="142" font-size="12.5" fill="var(--ink)">Warden loop · latest rounds</text>
-      <rect x="0" y="150" width="17" height="22" fill="var(--bar-bg)"/>
+      <text x="0" y="142" font-size="12.5" fill="var(--ink)">Warden loop · latest quarter</text>
+      <rect x="0" y="150" width="25" height="22" fill="var(--bar-bg)"/>
       <rect x="0" y="150" width="2" height="22" fill="var(--bar-crit)"/>
-      <text x="25" y="165" font-size="11.5" fill="var(--good)" font-family="ui-monospace, Menlo, monospace">2.3% manipulated · 0.0% executed</text>
+      <text x="33" y="165" font-size="11.5" fill="var(--good)" font-family="ui-monospace, Menlo, monospace">3.3% manipulated · 0.0% executed</text>
     </g>
   </svg>
 </div>
 <p class="legend">Grey bar = manipulated (agent proposed an out-of-scope call). Red bar = executed
 (the call passed the permission gate).</p>
 <p class="note">Undefended = 322 attacks across 7 models, policy <span class="mono">p48/s58</span>.
-Warden loop = run <span class="mono">warden-v3</span>, 862 attacks over 116 rounds against live
-models; first/latest are the means of the first and last quarter of rounds.</p>
+Warden loop = run <span class="mono">warden-v3</span>, 1,792 attacks over 336 rounds against live
+models; first/latest are the means of the first and last quarter of rounds. Across the whole
+defended run the rates are <strong>3.7% manipulated and 0.2% executed</strong> — the loop converged
+inside roughly the first hundred rounds and has held there since, which is the more useful claim:
+not a lucky dip, a level it sustains.</p>
 
 <p>Two failure modes are tracked separately because they have separate fixes.
 <strong>Intent</strong> is a prompt problem — the model was talked into wanting the wrong thing.
@@ -183,10 +186,10 @@ that refuses everything would score zero on attacks and be useless as an agent.<
 
 <blockquote class="flag">
   <span class="hd">What those breaches did, on the mocked target</span>
-  <p>Across the demo runs the successful attacks produced <strong>65 unauthorized refund rows
-  totalling $10,744</strong> and email exfiltration to <strong>9 addresses</strong>. Each is a real
-  Postgres row in the audit ledger, and none touched the outside world: no payment processor, no
-  SMTP. See §5.</p>
+  <p>Across the runs the successful attacks produced <strong>71 unauthorized refund rows totalling
+  $11,035</strong> and <strong>214 emails of customer data to 9 attacker-controlled
+  addresses</strong>. Each is a real Postgres row in the audit ledger, and none touched the outside
+  world: no payment processor, no SMTP. See §5.</p>
 </blockquote>
 
 <h2><span class="n">§2</span>How it works</h2>
@@ -215,31 +218,34 @@ improved, never that the test got easier.</p>
 
 <h2><span class="n">§3</span>Results — the hardening run</h2>
 <dl class="kv">
-  <dt>Attacks</dt><dd>862 across 116 live rounds</dd>
-  <dt>Intent rate</dt><dd>8.0% &rarr; 2.3%</dd>
-  <dt>Executed rate</dt><dd>2.0% &rarr; 0.0%</dd>
-  <dt>Patches</dt><dd>23 applied · 7 held · 5 reverted</dd>
-  <dt>Modelled spend</dt><dd>$4.08</dd>
+  <dt>Attacks</dt><dd>1,792 across 336 live rounds</dd>
+  <dt>Manipulated</dt><dd>3.7% overall &nbsp;·&nbsp; 5.6% &rarr; 3.3% first to last quarter</dd>
+  <dt>Executed</dt><dd>0.2% overall &nbsp;·&nbsp; 0.7% &rarr; 0.0% first to last quarter</dd>
+  <dt>Patches</dt><dd>25 applied · 8 held · 7 reverted</dd>
+  <dt>Modelled spend</dt><dd>$7.38</dd>
 </dl>
-<p>Over the run the loop drove the intent rate from 8.0% down to 2.3% and the executed-breach rate
-from 2.0% to 0.0%, applying 23 patches — of which 7 were verified and held, and 5 were
-automatically reverted when they failed to earn their keep.</p>
+<p>Against the undefended baseline of 65.5% manipulated and 22.4% executed, the defended loop runs
+at <strong>3.7% and 0.2%</strong> — three executed breaches in 1,792 attacks. It reached that level
+early and has held it across 336 rounds rather than drifting back, which matters more than the
+size of the initial drop. Of 25 patches applied, 8 were verified and held and 7 were automatically
+reverted when they failed to earn their keep.</p>
 
 <blockquote>
   <span class="hd">The tradeoff, stated plainly</span>
   <p>Hardening is not free. Benign competence started at <strong>0.944</strong> (17 of 18
-  legitimate cases served) and sits at <strong>0.833</strong> (15 of 18) in the latest rounds; the
-  drift guard reverted the patches that pushed it furthest, with the lowest observed point at
-  0.778. <strong>In its current state Warden trades about two of eighteen benign cases to take
-  executed breaches to zero.</strong> That cost is measured, governed and visible in the ledger
-  rather than hidden — and recovering those cases without giving back enforcement is what the loop
-  keeps working on.</p>
+  legitimate cases served) and sits at <strong>0.833</strong> (15 of 18); the drift guard reverted
+  7 patches that pushed it further, with the lowest observed point at 0.722. The sharper number is
+  the false-refusal rate, now <strong>27.3%</strong>: the hardened policy turns away roughly one
+  legitimate request in four. <strong>That is the real cost of driving executed breaches to
+  0.2%</strong>, and it is the weakest figure on this page. It is measured, governed and visible in
+  the ledger rather than hidden, and recovering those cases without giving back enforcement is the
+  open problem the loop is still working on.</p>
 </blockquote>
 
 <h2><span class="n">§4</span>Production readiness</h2>
 <p>The claim is not that it runs. It is that it already survived failure.</p>
 <ul>
-  <li><strong>It survived a real crash.</strong> The dev machine died mid-run. On restart the 44,023-row hash chain verified intact end to end, and the budget governor reaped 3 orphaned reservations left by the killed process. Recovery was automatic.</li>
+  <li><strong>It survived a real crash.</strong> The dev machine died mid-run. On restart the hash chain — now 55,542 rows — verified intact end to end, and the budget governor reaped 3 orphaned reservations left by the killed process. Recovery was automatic.</li>
   <li><strong>Tamper-evident audit ledger.</strong> Append-only and hash-chained, with the chain computed server-side under a Postgres advisory lock and appends enforced by triggers and row-level security.</li>
   <li><strong>Budget governor with a kill switch.</strong> Pre-flight reservation gate, drain mode, hard kill switch, a <span class="mono">reconcile</span> command, and a 1.25&times; pricing safety factor under a $70 ceiling.</li>
   <li><strong>Real deployed infrastructure.</strong> Supabase Postgres holds all durable state; a stateless FastAPI service runs on Vercel serverless. No local-only shortcuts and no mock data.</li>
@@ -268,7 +274,7 @@ payment processor and no SMTP behind them. The blast radius is a database table.
 <ul>
   <li><strong>Source</strong> — <a href="https://github.com/ARP-source/warden">github.com/ARP-source/warden</a></li>
   <li><strong>Deployed API</strong> — <a href="https://warden-beryl.vercel.app">warden-beryl.vercel.app</a> (<span class="mono">/healthz</span> reports config, <span class="mono">/v1/chat</span> accepts an attack)</li>
-  <li><strong>Live dashboard</strong> — <a href="https://molab.marimo.io/notebooks/nb_Pxk1VkWyH1hVZsn6PBA9Cz/app">molab notebook</a>, reading straight from Supabase</li>
+  <li><strong>Live dashboard</strong> — <a href="https://molab.marimo.io/notebooks/nb_y8TEU4noYmk5XK3NnTWC8K/app">molab notebook</a>, reading straight from Supabase. molab does not start a kernel on its own: click <strong>Run it now</strong> and allow about thirty seconds for a cold start.</li>
   <li><strong>Traces</strong> — the Weave project on <a href="https://wandb.ai">wandb.ai</a></li>
 </ul>
 
@@ -293,8 +299,9 @@ so paraphrasing cannot accidentally defang the test.</p>
   <p>Warden — Agent Permission Immune System · build <span class="mono">demo-base-v1</span> ·
   figures from run <span class="mono">warden-v3</span> and benchmark
   <span class="mono">warden-modelcmp</span> · 2026-09-13.</p>
-  <p>Every number is drawn from the hash-verified audit ledger. Where a tradeoff exists — notably
-  the benign-competence cost in §3 — it is stated rather than smoothed.</p>
+  <p>Every number is drawn from the hash-verified audit ledger and was current at the time above;
+  the loop is still running, so the live dashboard will read slightly higher. Where a tradeoff
+  exists — notably the false-refusal cost in §3 — it is stated rather than smoothed.</p>
 </footer>
 
 </div>
