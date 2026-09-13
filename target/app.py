@@ -90,10 +90,16 @@ def _on_startup() -> None:
 SERVERLESS = bool(os.environ.get("VERCEL"))
 
 
+# Only these paths make model calls, so only these have traces to ship. Flushing
+# on the others was costing a network round trip on every health check for
+# nothing, which showed up as /healthz going from 0.4s to 2.2s.
+TRACED_PATHS = ("/v1/chat",)
+
+
 @app.middleware("http")
 async def _flush_traces(request, call_next):
     response = await call_next(request)
-    if SERVERLESS:
+    if SERVERLESS and request.url.path in TRACED_PATHS:
         try:
             obs.flush(timeout_s=5.0)
         except Exception:
