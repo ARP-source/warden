@@ -1,0 +1,10 @@
+.env
+.venv/
+data/
+data-archive-*/
+reports/
+__pycache__/
+*.pyc
+.pytest_cache/
+.vercel/
+node_modules/
